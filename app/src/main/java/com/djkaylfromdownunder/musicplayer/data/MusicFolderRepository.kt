@@ -195,4 +195,85 @@ class MusicFolderRepository(private val context: Context) {
         val ext = name.substringAfterLast('.', "").lowercase()
         return ext in SUPPORTED_AUDIO_EXTENSIONS
     }
+
+    /**
+     * Sweeps the entire music tree for image files sitting alongside audio files - the
+     * "cover.jpg"/"folder.jpg" that commonly comes bundled with a downloaded album - and
+     * moves every one of them into the single shared [METADATA_FOLDER_NAME] folder under
+     * the root, so a photo gallery app scanning the whole library doesn't see one picture
+     * per album folder. Same-named images from different albums are disambiguated by
+     * prefixing the album folder's own name. Returns how many images were moved.
+     */
+    suspend fun consolidateArtworkImages(rootUri: Uri): Int = withContext(Dispatchers.IO) {
+        val root = DocumentFile.fromTreeUri(context, rootUri) ?: return@withContext 0
+        if (!root.isDirectory) return@withContext 0
+
+        val metadataFolder = root.findFile(METADATA_FOLDER_NAME)?.takeIf { it.isDirectory }
+            ?: root.createDirectory(METADATA_FOLDER_NAME)
+            ?: return@withContext 0
+
+        var moved = 0
+        sweepImagesInto(root, metadataFolder) { moved++ }
+        invalidateFolderCache()
+        moved
+    }
+
+    private fun sweepImagesInto(folder: DocumentFile, metadataFolder: DocumentFile, onMoved: () -> Unit) {
+        // Never sweep the destination itself, or the background-picker's own image
+        // folder - those are user-chosen wallpaper images, not stray album art.
+        if (folder.uri == metadataFolder.uri) return
+        if (folder.name?.equals(BACKGROUND_FOLDER_NAME, ignoreCase = true) == true) return
+
+        val children = folder.listFiles()
+        children.filter { it.isFile && isImageFile(it) }.forEach { image ->
+            if (moveImageInto(image, metadataFolder, folder.name ?: "folder")) onMoved()
+        }
+        children.filter { it.isDirectory }.forEach { sub -> sweepImagesInto(sub, metadataFolder, onMoved) }
+    }
+
+    /** Copies [image] into [destFolder] under a collision-free name, then deletes the original. */
+    private fun moveImageInto(image: DocumentFile, destFolder: DocumentFile, parentFolderName: String): Boolean {
+        val originalName = image.name ?: "image"
+        val safeParent = parentFolderName.replace(Regex("[\\\\/:*?\"<>|]"), "_").trim().ifBlank { "folder" }
+        val dot = originalName.lastIndexOf('.')
+        val base = if (dot > 0) originalName.substring(0, dot) else originalName
+        val ext = if (dot > 0) originalName.substring(dot) else ""
+
+        var targetName = "${safeParent}_$originalName"
+        var suffix = 1
+        while (destFolder.findFile(targetName) != null) {
+            targetName = "${safeParent}_${base}_$suffix$ext"
+            suffix++
+        }
+
+        val newFile = destFolder.createFile(image.type ?: "image/*", targetName) ?: return false
+        val copied = runCatching {
+            context.contentResolver.openInputStream(image.uri)?.use { input ->
+                context.contentResolver.openOutputStream(newFile.uri)?.use { output ->
+                    input.copyTo(output)
+                }
+            } != null
+        }.getOrDefault(false)
+
+        return if (copied) {
+            image.delete()
+            true
+        } else {
+            newFile.delete()
+            false
+        }
+    }
+
+    private fun isImageFile(file: DocumentFile): Boolean {
+        val mime = file.type
+        if (mime != null && mime.startsWith("image/")) return true
+
+        val name = file.name ?: return false
+        val ext = name.substringAfterLast('.', "").lowercase()
+        return ext in IMAGE_EXTENSIONS
+    }
 }
+
+// Must match BackgroundImageRepository's own folder name - kept as a local constant here
+// rather than a cross-file reference, since it's only needed for this one skip check.
+private const val BACKGROUND_FOLDER_NAME = "background"

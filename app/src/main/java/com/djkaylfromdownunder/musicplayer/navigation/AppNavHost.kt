@@ -39,6 +39,8 @@ object Routes {
     const val SETTINGS = "settings"
     const val SKIP_REVIEW = "skip_review"
     const val SEARCH = "search"
+    const val CUSTOMIZE_DOCK = "customize_dock"
+    const val REARRANGE_SETTINGS = "rearrange_settings"
     const val FOLDER_PATTERN = "folder/{encodedUri}/{encodedName}"
 
     /** Builds a navigable route for a specific folder, URL-encoding its URI and name. */
@@ -60,6 +62,9 @@ fun AppNavHost() {
     val viewPreferencesViewModel: ViewPreferencesViewModel = viewModel()
     val favoritesViewModel: FavoritesViewModel = viewModel()
     val customPlaylistViewModel: CustomPlaylistViewModel = viewModel()
+    val dockPreferencesViewModel: DockPreferencesViewModel = viewModel()
+    val fontPreferencesViewModel: FontPreferencesViewModel = viewModel()
+    val settingsLayoutViewModel: SettingsLayoutViewModel = viewModel()
 
     var showViewSheet by remember { mutableStateOf(false) }
 
@@ -71,7 +76,13 @@ fun AppNavHost() {
     val isFolderRoute = currentRoute == Routes.FOLDER_PATTERN
 
     // Full-screen destinations that hide the mini-player/bottom nav entirely.
-    val hideBottomBarRoutes = setOf(Routes.PLAYER, Routes.SKIP_REVIEW, Routes.SEARCH, Routes.CREATE_PLAYLIST)
+    val hideBottomBarRoutes = setOf(
+        Routes.PLAYER, Routes.SKIP_REVIEW, Routes.SEARCH, Routes.CREATE_PLAYLIST,
+        Routes.CUSTOMIZE_DOCK, Routes.REARRANGE_SETTINGS
+    )
+
+    val visibleDockIds by dockPreferencesViewModel.visibleIds.collectAsState()
+    val dockItems = remember(visibleDockIds) { dockPreferencesViewModel.resolve(visibleDockIds) }
 
     Scaffold(
             bottomBar = {
@@ -83,6 +94,7 @@ fun AppNavHost() {
                             onExpand = { navController.navigate(Routes.PLAYER) }
                         )
                         AppBottomNav(
+                            dockItems = dockItems,
                             currentRoute = if (isFolderRoute) Routes.LIBRARY else currentRoute,
                             onNavigate = { route ->
                                 navController.navigate(route) {
@@ -90,9 +102,8 @@ fun AppNavHost() {
                                     launchSingleTop = true
                                 }
                             },
-                            onViewClick = { showViewSheet = true },
-                            onSearchClick = { navController.navigate(Routes.SEARCH) },
-                            onNowPlayingClick = { navController.navigate(Routes.PLAYER) }
+                            onPushNavigate = { route -> navController.navigate(route) },
+                            onViewClick = { showViewSheet = true }
                         )
                     }
                 }
@@ -216,9 +227,26 @@ fun AppNavHost() {
                             libraryViewModel = libraryViewModel,
                             metadataViewModel = metadataViewModel,
                             themeViewModel = themeViewModel,
-                            onNavigateToSkipReview = { navController.navigate(Routes.SKIP_REVIEW) }
+                            fontPreferencesViewModel = fontPreferencesViewModel,
+                            settingsLayoutViewModel = settingsLayoutViewModel,
+                            onNavigateToSkipReview = { navController.navigate(Routes.SKIP_REVIEW) },
+                            onNavigateToCustomizeDock = { navController.navigate(Routes.CUSTOMIZE_DOCK) },
+                            onNavigateToRearrangeSettings = { navController.navigate(Routes.REARRANGE_SETTINGS) }
                         )
                     }
+                }
+                composable(Routes.CUSTOMIZE_DOCK) {
+                    CustomizeDockScreen(
+                        dockPreferencesViewModel = dockPreferencesViewModel,
+                        onBack = { navController.popBackStack() }
+                    )
+                }
+                composable(Routes.REARRANGE_SETTINGS) {
+                    RearrangeSettingsScreen(
+                        settingsLayoutViewModel = settingsLayoutViewModel,
+                        themeViewModel = themeViewModel,
+                        onBack = { navController.popBackStack() }
+                    )
                 }
                 composable(Routes.SKIP_REVIEW) {
                     SkipReviewScreen(

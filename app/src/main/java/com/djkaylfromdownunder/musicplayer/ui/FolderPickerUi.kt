@@ -5,12 +5,17 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 
 /**
  * Settings screen entry point: button that launches the SAF directory picker.
  */
 @Composable
-fun ChooseMusicFolderButton(viewModel: MusicLibraryViewModel) {
+fun ChooseMusicFolderButton(
+    viewModel: MusicLibraryViewModel,
+    modifier: Modifier = Modifier,
+    label: String = "Choose Music Folder"
+) {
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
     ) { uri ->
@@ -19,7 +24,7 @@ fun ChooseMusicFolderButton(viewModel: MusicLibraryViewModel) {
         }
     }
 
-    OutlinedButton(onClick = { launcher.launch(null) }) {
-        Text("Choose Music Folder")
+    OutlinedButton(onClick = { launcher.launch(null) }, modifier = modifier) {
+        Text(label)
     }
 }

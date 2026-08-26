@@ -47,3 +47,15 @@ val SUPPORTED_AUDIO_MIME_PREFIX = "audio/"
 val SUPPORTED_AUDIO_EXTENSIONS = setOf(
     "mp3", "flac", "wav", "m4a", "aac", "ogg", "opus", "wma"
 )
+
+/**
+ * Shared folder name (directly under the user's chosen music root) for everything the app
+ * itself persists about the library: the metadata JSON cache (see MetadataStore) and any
+ * album-art images swept out of individual album folders (see
+ * MusicFolderRepository.consolidateArtworkImages) - one place instead of one picture per
+ * album folder cluttering a photo gallery app's view of the music library.
+ */
+const val METADATA_FOLDER_NAME = "MetaData"
+
+/** Fallback check by extension for image files, since some providers report generic mime types. */
+val IMAGE_EXTENSIONS = setOf("jpg", "jpeg", "png", "webp", "gif", "bmp")

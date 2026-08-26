@@ -5,6 +5,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -38,6 +39,10 @@ fun SkipReviewScreen(
         }
     }
 
+    // Pending permanent deletion, awaiting confirmation - distinct from unchecking a box
+    // (which only un-skips, leaving the file alone).
+    var pendingDelete by remember { mutableStateOf<Pair<Playlist, Track>?>(null) }
+
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier.fillMaxWidth().padding(16.dp),
@@ -47,7 +52,7 @@ fun SkipReviewScreen(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
             Spacer(modifier = Modifier.width(8.dp))
-            Text("Review Skip Items", style = MaterialTheme.typography.headlineSmall)
+            Text("Review Skipped Songs", style = MaterialTheme.typography.headlineSmall)
         }
 
         if (playlists.isEmpty()) {
@@ -84,6 +89,8 @@ fun SkipReviewScreen(
                             Checkbox(
                                 checked = true,
                                 onCheckedChange = { checked ->
+                                    // Unchecking just un-skips it - the track stays on disk
+                                    // and becomes playable again in its playlist.
                                     skipListViewModel.setSkipped(
                                         group.playlist.folderUri.toString(),
                                         track.uri.toString(),
@@ -97,11 +104,29 @@ fun SkipReviewScreen(
                                 style = MaterialTheme.typography.bodyLarge,
                                 modifier = Modifier.weight(1f)
                             )
+                            IconButton(onClick = { pendingDelete = group.playlist to track }) {
+                                Icon(
+                                    Icons.Default.Delete,
+                                    contentDescription = "Delete ${track.displayName}",
+                                    tint = MaterialTheme.colorScheme.error
+                                )
+                            }
                         }
                     }
                 }
                 item { Spacer(modifier = Modifier.height(24.dp)) }
             }
         }
+    }
+
+    pendingDelete?.let { (playlist, track) ->
+        DeleteConfirmationDialog(
+            onConfirm = {
+                skipListViewModel.deleteSkippedTrack(playlist.folderUri.toString(), track.uri)
+                refreshTick++
+                pendingDelete = null
+            },
+            onDismiss = { pendingDelete = null }
+        )
     }
 }

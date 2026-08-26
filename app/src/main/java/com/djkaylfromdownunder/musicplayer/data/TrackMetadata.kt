@@ -11,7 +11,8 @@ import org.json.JSONObject
 import java.io.File
 
 private const val TAG = "MetadataStore"
-private const val METADATA_FOLDER_NAME = "metadata"
+// The metadata folder used to be named "metadata" (lowercase) - see migrateOldFolderName.
+private const val OLD_METADATA_FOLDER_NAME = "metadata"
 private const val METADATA_FILE_NAME = "track_metadata.json"
 
 /**
@@ -98,6 +99,7 @@ class MetadataStore private constructor(private val context: Context) {
         try {
             val root = DocumentFile.fromTreeUri(context, rootUri) ?: return@withContext
             val folder = root.findFile(METADATA_FOLDER_NAME)?.takeIf { it.isDirectory }
+                ?: migrateOldFolderName(root)
                 ?: root.createDirectory(METADATA_FOLDER_NAME)
                 ?: return@withContext
             val file = folder.findFile(METADATA_FILE_NAME)
@@ -124,6 +126,17 @@ class MetadataStore private constructor(private val context: Context) {
             // re-picked) - keep using whatever's already cached/internal for now.
             Log.w(TAG, "Couldn't attach metadata store under $rootUri, falling back to internal storage", e)
         }
+    }
+
+    /**
+     * One-time migration: the metadata folder used to live under the lowercase name
+     * "metadata". If that still exists and the current "MetaData" folder doesn't yet,
+     * rename it in place rather than starting a fresh empty folder and silently losing
+     * every track's already-cached metadata.
+     */
+    private fun migrateOldFolderName(root: DocumentFile): DocumentFile? {
+        val old = root.findFile(OLD_METADATA_FOLDER_NAME)?.takeIf { it.isDirectory } ?: return null
+        return if (old.renameTo(METADATA_FOLDER_NAME)) old else null
     }
 
     @Synchronized

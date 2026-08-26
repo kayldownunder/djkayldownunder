@@ -9,9 +9,13 @@ import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material3.Surface
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.djkaylfromdownunder.musicplayer.navigation.AppNavHost
+import com.djkaylfromdownunder.musicplayer.ui.FontPreferencesViewModel
 import com.djkaylfromdownunder.musicplayer.ui.theme.DJKaylTheme
 
 class MainActivity : ComponentActivity() {
@@ -29,7 +33,9 @@ class MainActivity : ComponentActivity() {
         requestNotificationPermissionIfNeeded()
 
         setContent {
-            DJKaylTheme {
+            val fontPreferencesViewModel: FontPreferencesViewModel = viewModel()
+            val fontPrefs by fontPreferencesViewModel.fontPrefs.collectAsState()
+            DJKaylTheme(fontPrefs = fontPrefs) {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     AppNavHost()
                 }

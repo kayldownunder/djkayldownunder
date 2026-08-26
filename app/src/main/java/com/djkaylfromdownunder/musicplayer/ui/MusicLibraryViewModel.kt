@@ -85,6 +85,16 @@ class MusicLibraryViewModel(application: Application) : AndroidViewModel(applica
     }
 
     /**
+     * Sweeps every album folder for stray cover-art image files and moves them into the
+     * single shared MetaData folder - see MusicFolderRepository.consolidateArtworkImages.
+     * Returns how many images were moved, or null if no root folder is chosen yet.
+     */
+    suspend fun consolidateArtworkImages(): Int? {
+        val root = _rootUri.value ?: return null
+        return repository.consolidateArtworkImages(root)
+    }
+
+    /**
      * Resolves any folder - leaf or branching, any depth - into one playable Playlist of
      * everything nested inside it. Used to favorite/sync a whole branching folder (e.g. an
      * artist folder with several albums) as a single unit.

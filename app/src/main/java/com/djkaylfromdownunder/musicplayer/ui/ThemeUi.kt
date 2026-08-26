@@ -20,7 +20,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewModelScope
 import coil.compose.AsyncImage
@@ -51,6 +54,10 @@ class ThemeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectImage(target: BackgroundTarget, uri: Uri) {
         viewModelScope.launch { repository.setImage(target, uri.toString()) }
+    }
+
+    fun selectColor(target: BackgroundTarget, argb: Int) {
+        viewModelScope.launch { repository.setColor(target, argb) }
     }
 
     fun clearImage(target: BackgroundTarget) {
@@ -84,57 +91,59 @@ fun TargetedBackground(
 ) {
     val background by themeViewModel.backgroundFor(target).collectAsState()
 
+    val imageUri = background.selectedImageUri
+    val colorArgb = background.selectedColorArgb
+
     Box(modifier = Modifier.fillMaxSize()) {
-        if (background.selectedImageUri != null) {
-            AsyncImage(
-                model = background.selectedImageUri,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
-            if (scrim) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.45f))
+        when {
+            imageUri != null -> {
+                AsyncImage(
+                    model = imageUri,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
                 )
+                if (scrim) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.45f))
+                    )
+                }
             }
-        } else {
-            Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+            colorArgb != null -> {
+                Box(modifier = Modifier.fillMaxSize().background(Color(colorArgb)))
+            }
+            else -> {
+                Box(modifier = Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background))
+            }
         }
         content()
     }
 }
 
-/** Drop this into your Settings screen for background customization. */
+/**
+ * Standalone shortcut button for one background target - no shared section header, so it
+ * can be placed independently in the Settings screen's reorderable grid.
+ */
 @Composable
-fun BackgroundSettingsSection(themeViewModel: ThemeViewModel) {
-    var openPickerFor by remember { mutableStateOf<BackgroundTarget?>(null) }
+fun BackgroundShortcutButton(
+    target: BackgroundTarget,
+    label: String,
+    themeViewModel: ThemeViewModel,
+    modifier: Modifier = Modifier
+) {
+    var showPicker by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxWidth()) {
-        Text("Background", style = MaterialTheme.typography.titleMedium)
-        Spacer(modifier = Modifier.height(8.dp))
-
-        OutlinedButton(
-            onClick = { openPickerFor = BackgroundTarget.LIBRARY },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Library Background")
-        }
-        Spacer(modifier = Modifier.height(8.dp))
-        OutlinedButton(
-            onClick = { openPickerFor = BackgroundTarget.SETTINGS },
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Text("Settings Screen Background")
-        }
+    OutlinedButton(onClick = { showPicker = true }, modifier = modifier) {
+        Text(label)
     }
 
-    openPickerFor?.let { target ->
+    if (showPicker) {
         BackgroundPickerDialog(
             target = target,
             themeViewModel = themeViewModel,
-            onDismiss = { openPickerFor = null }
+            onDismiss = { showPicker = false }
         )
     }
 }
@@ -192,6 +201,43 @@ private fun BackgroundPickerDialog(
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Text(if (isAdding) "Adding…" else "Add Image")
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    "Or use a flat color",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Spacer(modifier = Modifier.height(8.dp))
+                LazyVerticalGrid(
+                    columns = GridCells.Fixed(6),
+                    modifier = Modifier.height(88.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(PRESET_COLORS) { (name, color) ->
+                        val isSelected = current.selectedColorArgb == color.toArgb()
+                        Box(
+                            modifier = Modifier
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(color)
+                                .then(
+                                    if (isSelected) {
+                                        Modifier.border(2.dp, MaterialTheme.colorScheme.primary, RoundedCornerShape(8.dp))
+                                    } else {
+                                        Modifier
+                                    }
+                                )
+                                .clickable {
+                                    themeViewModel.selectColor(target, color.toArgb())
+                                    onDismiss()
+                                }
+                                .semantics { contentDescription = name }
+                        )
+                    }
                 }
 
                 Spacer(modifier = Modifier.height(12.dp))

@@ -11,8 +11,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.VolumeDown
-import androidx.compose.material.icons.automirrored.filled.VolumeUp
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,15 +19,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import com.djkaylfromdownunder.musicplayer.data.Playlist
 import com.djkaylfromdownunder.musicplayer.data.Track
@@ -58,8 +58,9 @@ fun PlayerScreen(
     }
 
     // Other albums to suggest once the user scrolls past the current playlist: sibling
-    // folders under the same parent when there are any, otherwise anything else in the
-    // library so there's always something to pick from.
+    // folders under the same parent (shown first, as a horizontal row), then every other
+    // playlist in the library so scrolling further keeps going straight into the main
+    // library list instead of dead-ending.
     val currentFolderUriStr = state.currentPlaylistFolderUri
     val sameFolderRecommendations = remember(currentFolderUriStr, allPlaylists) {
         if (currentFolderUriStr == null || allPlaylists.isEmpty()) {
@@ -71,12 +72,11 @@ fun PlayerScreen(
             }
         }
     }
-    val recommendations = remember(sameFolderRecommendations, currentFolderUriStr, allPlaylists) {
-        sameFolderRecommendations.ifEmpty {
-            allPlaylists.filter { it.folderUri.toString() != currentFolderUriStr }
-        }.take(15)
+    val libraryContinuation = remember(sameFolderRecommendations, currentFolderUriStr, allPlaylists) {
+        val alreadyShown = (sameFolderRecommendations.map { it.folderUri.toString() } +
+            listOfNotNull(currentFolderUriStr)).toSet()
+        allPlaylists.filter { it.folderUri.toString() !in alreadyShown }
     }
-    val recommendationsAreFromSameFolder = sameFolderRecommendations.isNotEmpty()
 
     // Collapsing-artwork state: height tracks scroll delta directly via nested scroll,
     // shrinking the art before the track list underneath it scrolls at all, and growing
@@ -155,6 +155,8 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                CompactVerticalVolumeControl(state = state, viewModel = viewModel)
+                Spacer(modifier = Modifier.width(12.dp))
                 Checkbox(
                     checked = isSkipMarked,
                     onCheckedChange = { checked ->
@@ -232,8 +234,10 @@ fun PlayerScreen(
                 }
             }
 
-            // Bottom half: title/album plus every transport control. Always fully
-            // visible regardless of how far the artwork above has collapsed.
+            // Title/album - stays with the artwork above the track list. The actual
+            // transport controls and progress bar live in the slim bar pinned to the
+            // bottom of the whole screen (see CompactPlaybackBar below); volume now sits
+            // beside the skip-this-song row above (see CompactVerticalVolumeControl).
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -260,18 +264,6 @@ fun PlayerScreen(
                         overflow = TextOverflow.Ellipsis
                     )
                 }
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                PlaybackSlider(state = state, viewModel = viewModel)
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                PlaybackControls(state = state, viewModel = viewModel, buttonSize = 56.dp)
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                HorizontalVolumeControl(state = state, viewModel = viewModel)
             }
 
             HorizontalDivider(
@@ -315,13 +307,39 @@ fun PlayerScreen(
                             }
                         )
                     }
-                    if (recommendations.isNotEmpty()) {
+                    if (sameFolderRecommendations.isNotEmpty()) {
                         item {
                             RecommendationsSection(
-                                title = if (recommendationsAreFromSameFolder) "MORE FROM THIS FOLDER" else "FROM YOUR LIBRARY",
-                                playlists = recommendations,
+                                title = "MORE FROM THIS FOLDER",
+                                playlists = sameFolderRecommendations,
                                 metadataViewModel = metadataViewModel,
                                 onPlaylistClick = onPlayRecommendation
+                            )
+                        }
+                    }
+                    // Seamless continuation: past the current playlist (and any
+                    // same-folder siblings above), keep scrolling straight into every
+                    // other playlist in the library instead of stopping.
+                    if (libraryContinuation.isNotEmpty()) {
+                        item {
+                            Column(modifier = Modifier.padding(top = 16.dp)) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
+                                )
+                                Text(
+                                    "YOUR LIBRARY",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 4.dp)
+                                )
+                            }
+                        }
+                        items(libraryContinuation, key = { "lib:${it.folderUri}" }) { playlist ->
+                            LibraryPlaylistRow(
+                                playlist = playlist,
+                                metadataViewModel = metadataViewModel,
+                                onClick = { onPlayRecommendation(playlist) }
                             )
                         }
                     }
@@ -329,6 +347,11 @@ fun PlayerScreen(
                 }
             }
         }
+
+        // Slim, always-visible playback bar pinned to the very bottom of the screen -
+        // progress line plus previous/play-pause/next, kept minimal so the artwork and
+        // track list above get as much room as possible.
+        CompactPlaybackBar(state = state, viewModel = viewModel)
     }
 }
 
@@ -398,6 +421,53 @@ private fun RecommendationCard(
             maxLines = 1,
             overflow = TextOverflow.Ellipsis
         )
+    }
+}
+
+/**
+ * A row in the seamless "keep scrolling into the library" continuation below the
+ * recommendations - deliberately lighter than [RecommendationCard] (no favorite/delete,
+ * just art, name, and track count) since there can be many of these.
+ */
+@Composable
+private fun LibraryPlaylistRow(
+    playlist: Playlist,
+    metadataViewModel: MetadataViewModel,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 24.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(RoundedCornerShape(6.dp))
+                .background(SurfaceCard)
+        ) {
+            TrackArtwork(
+                track = playlist.tracks.firstOrNull(),
+                metadataViewModel = metadataViewModel,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = playlist.name,
+                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${playlist.trackCount} tracks",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 }
 
@@ -483,6 +553,25 @@ private fun QueueRow(
     }
 }
 
+/**
+ * Slim, always-visible playback bar pinned to the bottom of the Player screen: a thin
+ * seekable progress line with previous/play-pause/next directly beneath it, and nothing
+ * else - no time labels, no volume - so it stays a minimal single strip regardless of how
+ * far the artwork/track list above it has scrolled.
+ */
+@Composable
+private fun CompactPlaybackBar(state: PlayerUiState, viewModel: PlayerViewModel) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+    ) {
+        PlaybackSlider(state = state, viewModel = viewModel)
+        PlaybackControls(state = state, viewModel = viewModel)
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun PlaybackSlider(state: PlayerUiState, viewModel: PlayerViewModel) {
@@ -490,36 +579,40 @@ private fun PlaybackSlider(state: PlayerUiState, viewModel: PlayerViewModel) {
         value = state.positionMs.toFloat(),
         onValueChange = { viewModel.seekTo(it.toLong()) },
         valueRange = 0f..(state.durationMs.coerceAtLeast(1L).toFloat()),
-        // A smaller, custom thumb instead of Material3's default pill shape - stays
-        // visible without dominating the timeline.
+        // A slim custom thumb/track instead of Material3's default pill shape, and no
+        // time labels - kept to a single thin line for the bottom bar.
         thumb = {
             Box(
                 modifier = Modifier
-                    .size(width = 3.dp, height = 14.dp)
+                    .size(width = 3.dp, height = 10.dp)
                     .background(MaterialTheme.colorScheme.primary, RoundedCornerShape(2.dp))
             )
         },
-        colors = SliderDefaults.colors(activeTrackColor = MaterialTheme.colorScheme.primary)
+        track = { sliderState ->
+            SliderDefaults.Track(
+                sliderState = sliderState,
+                modifier = Modifier.height(2.dp),
+                thumbTrackGapSize = 2.dp,
+                colors = SliderDefaults.colors(activeTrackColor = MaterialTheme.colorScheme.primary)
+            )
+        },
+        modifier = Modifier.fillMaxWidth().height(20.dp)
     )
-    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(formatMs(state.positionMs), style = MaterialTheme.typography.bodySmall)
-        Text(formatMs(state.durationMs), style = MaterialTheme.typography.bodySmall)
-    }
 }
 
 @Composable
-private fun PlaybackControls(state: PlayerUiState, viewModel: PlayerViewModel, buttonSize: Dp) {
+private fun PlaybackControls(state: PlayerUiState, viewModel: PlayerViewModel) {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceEvenly,
         verticalAlignment = Alignment.CenterVertically
     ) {
-        IconButton(onClick = { viewModel.skipPrevious() }, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(28.dp))
+        IconButton(onClick = { viewModel.skipPrevious() }, modifier = Modifier.size(40.dp)) {
+            Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(22.dp))
         }
         FilledIconButton(
             onClick = { viewModel.togglePlayPause() },
-            modifier = Modifier.size(buttonSize),
+            modifier = Modifier.size(44.dp),
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -528,25 +621,35 @@ private fun PlaybackControls(state: PlayerUiState, viewModel: PlayerViewModel, b
             Icon(
                 imageVector = if (state.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
                 contentDescription = if (state.isPlaying) "Pause" else "Play",
-                modifier = Modifier.size(buttonSize / 2)
+                modifier = Modifier.size(22.dp)
             )
         }
-        IconButton(onClick = { viewModel.skipNext() }, modifier = Modifier.size(48.dp)) {
-            Icon(Icons.Default.SkipNext, contentDescription = "Next", modifier = Modifier.size(28.dp))
+        IconButton(onClick = { viewModel.skipNext() }, modifier = Modifier.size(40.dp)) {
+            Icon(Icons.Default.SkipNext, contentDescription = "Next", modifier = Modifier.size(22.dp))
         }
     }
 }
 
-/** Horizontal volume slider - icon, slider, icon - sitting below the transport controls. */
+/**
+ * Small vertical volume slider with +/- step buttons above and below it - sits to the
+ * left of the skip-this-song row, kept deliberately narrow so it doesn't crowd that row's
+ * checkbox/text/Skip button/delete icon.
+ */
 @Composable
-private fun HorizontalVolumeControl(state: PlayerUiState, viewModel: PlayerViewModel) {
-    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Icon(
-            Icons.AutoMirrored.Filled.VolumeDown,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp)
-        )
+private fun CompactVerticalVolumeControl(state: PlayerUiState, viewModel: PlayerViewModel) {
+    fun step(delta: Float) {
+        viewModel.setVolume((state.volume + delta).coerceIn(0f, 1f))
+    }
+
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        IconButton(onClick = { step(0.1f) }, modifier = Modifier.size(22.dp)) {
+            Icon(
+                Icons.Default.Add,
+                contentDescription = "Increase volume",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp)
+            )
+        }
         Slider(
             value = state.volume,
             onValueChange = { viewModel.setVolume(it) },
@@ -555,20 +658,36 @@ private fun HorizontalVolumeControl(state: PlayerUiState, viewModel: PlayerViewM
                 thumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 activeTrackColor = MaterialTheme.colorScheme.onSurfaceVariant
             ),
-            modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
+            // Built by rotating a standard Slider 270° and swapping its reported
+            // width/height, since Material3 has no vertical Slider variant.
+            modifier = Modifier
+                .height(56.dp)
+                .width(20.dp)
+                .graphicsLayer {
+                    rotationZ = 270f
+                    transformOrigin = TransformOrigin(0f, 0f)
+                }
+                .layout { measurable, constraints ->
+                    val placeable = measurable.measure(
+                        Constraints(
+                            minWidth = constraints.minHeight,
+                            maxWidth = constraints.maxHeight,
+                            minHeight = constraints.minWidth,
+                            maxHeight = constraints.maxWidth
+                        )
+                    )
+                    layout(placeable.height, placeable.width) {
+                        placeable.place(-placeable.width, 0)
+                    }
+                }
         )
-        Icon(
-            Icons.AutoMirrored.Filled.VolumeUp,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.size(16.dp)
-        )
+        IconButton(onClick = { step(-0.1f) }, modifier = Modifier.size(22.dp)) {
+            Icon(
+                Icons.Default.Remove,
+                contentDescription = "Decrease volume",
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(14.dp)
+            )
+        }
     }
-}
-
-private fun formatMs(ms: Long): String {
-    val totalSeconds = ms / 1000
-    val minutes = totalSeconds / 60
-    val seconds = totalSeconds % 60
-    return "%d:%02d".format(minutes, seconds)
 }
