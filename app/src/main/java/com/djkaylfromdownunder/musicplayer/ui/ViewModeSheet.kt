@@ -6,7 +6,6 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.ViewAgenda
 import androidx.compose.material.icons.filled.ViewModule
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
@@ -32,13 +31,6 @@ fun ViewModeSheet(
             )
             ViewModeOption(
                 label = "Large",
-                description = "1 per row, big cover art",
-                icon = Icons.Default.ViewAgenda,
-                selected = currentMode == PlaylistViewMode.LARGE,
-                onClick = { onModeSelected(PlaylistViewMode.LARGE) }
-            )
-            ViewModeOption(
-                label = "Medium",
                 description = "2 per row (default)",
                 icon = Icons.Default.GridView,
                 selected = currentMode == PlaylistViewMode.MEDIUM,
@@ -46,7 +38,7 @@ fun ViewModeSheet(
             )
             ViewModeOption(
                 label = "Small",
-                description = "3 per row, compact grid",
+                description = "3 per row, dense grid - see more albums at once",
                 icon = Icons.Default.ViewModule,
                 selected = currentMode == PlaylistViewMode.SMALL,
                 onClick = { onModeSelected(PlaylistViewMode.SMALL) }

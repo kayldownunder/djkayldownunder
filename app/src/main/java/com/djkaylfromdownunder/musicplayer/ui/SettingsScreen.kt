@@ -5,6 +5,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -13,8 +14,10 @@ fun SettingsScreen(
     themeViewModel: ThemeViewModel,
     onNavigateToSkipReview: () -> Unit
 ) {
-    val libraryState by libraryViewModel.state.collectAsState()
+    val rootUri by libraryViewModel.rootUri.collectAsState()
     val metadataProgress by metadataViewModel.progress.collectAsState()
+    var isScanningLibrary by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
     Column(
         modifier = Modifier
@@ -33,13 +36,25 @@ fun SettingsScreen(
         Text("Metadata", style = MaterialTheme.typography.titleMedium)
         Spacer(modifier = Modifier.height(8.dp))
 
-        val playlists = (libraryState as? LibraryState.Loaded)?.playlists.orEmpty()
-
         OutlinedButton(
-            onClick = { metadataViewModel.fetchMetadataForAllPlaylists(playlists) },
-            enabled = playlists.isNotEmpty() && !metadataProgress.isRunning
+            onClick = {
+                scope.launch {
+                    isScanningLibrary = true
+                    val playlists = libraryViewModel.scanAllPlaylists()
+                    isScanningLibrary = false
+                    if (playlists.isNotEmpty()) {
+                        metadataViewModel.fetchMetadataForAllPlaylists(playlists)
+                    }
+                }
+            },
+            enabled = rootUri != null && !metadataProgress.isRunning && !isScanningLibrary
         ) {
             Text("Fetch Metadata for All Playlists")
+        }
+
+        if (isScanningLibrary) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text("Scanning library…", style = MaterialTheme.typography.bodyMedium)
         }
 
         if (metadataProgress.isRunning) {

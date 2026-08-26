@@ -112,16 +112,13 @@ fun FolderBrowserScreen(
                 }
             }
             else -> {
-                val columns = when (viewMode) {
-                    PlaylistViewMode.LARGE -> 1
-                    PlaylistViewMode.SMALL -> 3
-                    else -> 2
-                }
+                val isSmall = viewMode == PlaylistViewMode.SMALL
+                val columns = if (isSmall) 3 else 2
                 LazyVerticalGrid(
                     columns = GridCells.Fixed(columns),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (isSmall) 6.dp else 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (isSmall) 10.dp else 16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(current, key = { folderItemKey(it) }) { item ->
@@ -236,58 +233,56 @@ private fun SubFolderGridCard(
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
             )
 
-            // Heart and sync sit top-left; delete sits top-right - as far apart as the
-            // card allows, so the destructive action is never next to the other two. A
-            // whole branching folder can be favorited or synced as one unit this way,
-            // even though it has no tracks directly inside itself.
-            Row(
-                modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Heart sits top-left, sync sits top-right, delete sits bottom-right - kept
+            // clear of both other actions since it's destructive. A whole branching
+            // folder can be favorited or synced as one unit this way, even though it has
+            // no tracks directly inside itself.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .size(badgeSize)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
+                    .clickable { favoritesViewModel.toggleFavorite(favoriteKey) },
+                contentAlignment = Alignment.Center
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(badgeSize)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
-                        .clickable { favoritesViewModel.toggleFavorite(favoriteKey) },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                        tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(if (compact) 14.dp else 18.dp)
-                    )
-                }
-                Box(
-                    modifier = Modifier
-                        .size(badgeSize)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
-                        .clickable(enabled = canSync) {
-                            syncSubFolder(scope, libraryViewModel, metadataViewModel, item.uri) { isResolving = it }
-                        },
-                    contentAlignment = Alignment.Center
-                ) {
-                    if (isFetching) {
-                        CircularProgressIndicator(
-                            modifier = Modifier.size(if (compact) 12.dp else 16.dp),
-                            strokeWidth = 2.dp,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    } else {
-                        Icon(
-                            imageVector = Icons.Default.Download,
-                            contentDescription = "Fetch metadata for ${item.name}",
-                            modifier = Modifier.size(if (compact) 14.dp else 18.dp)
-                        )
-                    }
-                }
+                Icon(
+                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                    tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(if (compact) 14.dp else 18.dp)
+                )
             }
             Box(
                 modifier = Modifier
                     .align(Alignment.TopEnd)
+                    .padding(6.dp)
+                    .size(badgeSize)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
+                    .clickable(enabled = canSync) {
+                        syncSubFolder(scope, libraryViewModel, metadataViewModel, item.uri) { isResolving = it }
+                    },
+                contentAlignment = Alignment.Center
+            ) {
+                if (isFetching) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(if (compact) 12.dp else 16.dp),
+                        strokeWidth = 2.dp,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = "Fetch metadata for ${item.name}",
+                        modifier = Modifier.size(if (compact) 14.dp else 18.dp)
+                    )
+                }
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
                     .padding(6.dp)
                     .size(badgeSize)
                     .clip(CircleShape)
@@ -311,7 +306,7 @@ private fun SubFolderGridCard(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(if (compact) 4.dp else 8.dp))
         Text(
             text = item.name,
             style = if (compact) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)

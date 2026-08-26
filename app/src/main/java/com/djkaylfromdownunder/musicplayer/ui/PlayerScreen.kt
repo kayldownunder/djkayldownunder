@@ -1,10 +1,14 @@
 package com.djkaylfromdownunder.musicplayer.ui
 
+import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.VolumeDown
@@ -15,28 +19,100 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.layout
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.djkaylfromdownunder.musicplayer.data.Playlist
 import com.djkaylfromdownunder.musicplayer.data.Track
+import com.djkaylfromdownunder.musicplayer.data.parentFolderKey
 import com.djkaylfromdownunder.musicplayer.ui.theme.AccentCoralDim
 import com.djkaylfromdownunder.musicplayer.ui.theme.BackgroundBlack
+import com.djkaylfromdownunder.musicplayer.ui.theme.SurfaceCard
+
+// Artwork shrinks from this height down to nothing as the track list below is scrolled.
+private val MAX_ARTWORK_HEIGHT = 300.dp
 
 @Composable
 fun PlayerScreen(
     viewModel: PlayerViewModel,
     metadataViewModel: MetadataViewModel,
     skipListViewModel: SkipListViewModel,
-    onCollapse: () -> Unit = {}
+    libraryViewModel: MusicLibraryViewModel,
+    onCollapse: () -> Unit = {},
+    onPlayRecommendation: (Playlist) -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    val libraryState by libraryViewModel.state.collectAsState()
+    val allPlaylists = remember(libraryState) {
+        (libraryState as? LibraryState.Loaded)?.playlists.orEmpty()
+    }
+
+    // Other albums to suggest once the user scrolls past the current playlist: sibling
+    // folders under the same parent when there are any, otherwise anything else in the
+    // library so there's always something to pick from.
+    val currentFolderUriStr = state.currentPlaylistFolderUri
+    val sameFolderRecommendations = remember(currentFolderUriStr, allPlaylists) {
+        if (currentFolderUriStr == null || allPlaylists.isEmpty()) {
+            emptyList()
+        } else {
+            val currentKey = Uri.parse(currentFolderUriStr).parentFolderKey()
+            allPlaylists.filter {
+                it.folderUri.toString() != currentFolderUriStr && it.folderUri.parentFolderKey() == currentKey
+            }
+        }
+    }
+    val recommendations = remember(sameFolderRecommendations, currentFolderUriStr, allPlaylists) {
+        sameFolderRecommendations.ifEmpty {
+            allPlaylists.filter { it.folderUri.toString() != currentFolderUriStr }
+        }.take(15)
+    }
+    val recommendationsAreFromSameFolder = sameFolderRecommendations.isNotEmpty()
+
+    // Collapsing-artwork state: height tracks scroll delta directly via nested scroll,
+    // shrinking the art before the track list underneath it scrolls at all, and growing
+    // it back once the list is scrolled back to its own top.
+    val density = LocalDensity.current
+    val maxArtHeightPx = with(density) { MAX_ARTWORK_HEIGHT.toPx() }
+    var artHeightPx by remember { mutableFloatStateOf(maxArtHeightPx) }
+    val listState = rememberLazyListState()
+
+    val nestedScrollConnection = remember(listState) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                val delta = available.y
+                val atListTop = listState.firstVisibleItemIndex == 0 && listState.firstVisibleItemScrollOffset == 0
+                if (delta < 0 && artHeightPx > 0f) {
+                    val newHeight = (artHeightPx + delta).coerceIn(0f, maxArtHeightPx)
+                    val consumed = newHeight - artHeightPx
+                    artHeightPx = newHeight
+                    return Offset(0f, consumed)
+                }
+                if (delta > 0 && artHeightPx < maxArtHeightPx && atListTop) {
+                    val newHeight = (artHeightPx + delta).coerceIn(0f, maxArtHeightPx)
+                    val consumed = newHeight - artHeightPx
+                    artHeightPx = newHeight
+                    return Offset(0f, consumed)
+                }
+                return Offset.Zero
+            }
+        }
+    }
+
+    // Switching tracks (e.g. via Next/Previous or tapping a queue row) re-expands the
+    // artwork, so it doesn't stay collapsed from browsing the list on the previous track.
+    LaunchedEffect(state.currentTrack?.uri) {
+        artHeightPx = maxArtHeightPx
+    }
 
     Column(
         modifier = Modifier
@@ -119,30 +195,32 @@ fun PlayerScreen(
             }
         }
 
-        // Now-playing controls. No weight here - the section sizes to its actual content
-        // (artwork row + slider + controls + volume) rather than a fixed fraction of the
-        // screen, so the artwork can be bigger without the playback controls silently
-        // clipping off-screen on shorter devices. Since this no longer forces a 50/50
-        // split, it ends up noticeably shorter than before while leaving Previous/Play/
-        // Delete/Next and the volume slider always fully visible.
+        // Everything below is one nested-scroll region: the track list drives the
+        // artwork's collapse/expand, while the playback controls between them stay put.
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 24.dp, vertical = 8.dp)
+                .weight(1f)
+                .nestedScroll(nestedScrollConnection)
         ) {
-            val currentMetadata = state.currentTrack?.let { metadataViewModel.metadataFor(it.uri.toString()) }
-            val songTitle = currentMetadata?.title?.takeIf { it.isNotBlank() }
-                ?: state.currentTrack?.displayName
-                ?: "Nothing playing"
-            val albumName = currentMetadata?.album?.takeIf { it.isNotBlank() }
-
-            Row(verticalAlignment = Alignment.Top) {
-                // Artwork, title, and album stacked together so they read as one unit.
-                Column(modifier = Modifier.weight(1f)) {
+            // Top half: collapsible album artwork. Shrinks to nothing and fades out as
+            // the track list is scrolled.
+            if (artHeightPx > 0.5f) {
+                val artHeightDp = with(density) { artHeightPx.toDp() }
+                val artFraction = (artHeightPx / maxArtHeightPx).coerceIn(0f, 1f)
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(artHeightDp)
+                        .padding(horizontal = 32.dp, vertical = 8.dp)
+                        .graphicsLayer { alpha = artFraction },
+                    contentAlignment = Alignment.Center
+                ) {
                     Box(
                         modifier = Modifier
-                            .size(80.dp)
-                            .clip(RoundedCornerShape(8.dp))
+                            .fillMaxHeight()
+                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                            .clip(RoundedCornerShape(16.dp))
                             .background(MaterialTheme.colorScheme.surfaceVariant)
                     ) {
                         TrackArtwork(
@@ -151,58 +229,72 @@ fun PlayerScreen(
                             modifier = Modifier.fillMaxSize()
                         )
                     }
-                    Spacer(modifier = Modifier.height(6.dp))
+                }
+            }
+
+            // Bottom half: title/album plus every transport control. Always fully
+            // visible regardless of how far the artwork above has collapsed.
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 8.dp)
+            ) {
+                val currentMetadata = state.currentTrack?.let { metadataViewModel.metadataFor(it.uri.toString()) }
+                val songTitle = currentMetadata?.title?.takeIf { it.isNotBlank() }
+                    ?: state.currentTrack?.displayName
+                    ?: "Nothing playing"
+                val albumName = currentMetadata?.album?.takeIf { it.isNotBlank() }
+
+                Text(
+                    text = songTitle,
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (albumName != null) {
                     Text(
-                        text = songTitle,
-                        style = MaterialTheme.typography.titleMedium,
+                        text = albumName,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
-                    if (albumName != null) {
-                        Text(
-                            text = albumName,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
                 }
-                Spacer(modifier = Modifier.width(16.dp))
-                // Vertical so it sits clear of the transport controls below rather than
-                // competing with them for width.
-                VerticalVolumeControl(state = state, viewModel = viewModel)
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                PlaybackSlider(state = state, viewModel = viewModel)
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                PlaybackControls(state = state, viewModel = viewModel, buttonSize = 56.dp)
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                HorizontalVolumeControl(state = state, viewModel = viewModel)
             }
 
-            Spacer(modifier = Modifier.height(8.dp))
-
-            PlaybackSlider(state = state, viewModel = viewModel)
-
-            Spacer(modifier = Modifier.height(4.dp))
-
-            PlaybackControls(state = state, viewModel = viewModel, buttonSize = 38.dp)
-        }
-
-        HorizontalDivider(
-            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
-        )
-
-        // Playlist: every track in the folder, with artwork, bold title, and artist name
-        // (pulled from fetched metadata where available). Skipped tracks show with a line
-        // through them; tapping one un-skips it and plays it. Touching and dragging
-        // anywhere in the list scrolls it, same as any normal scrollable list. weight(1f)
-        // here claims all the space the now-playing section above didn't need, so more
-        // tracks are visible at once.
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                "PLAYLIST",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp)
+            HorizontalDivider(
+                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
             )
+
+            // Track list: every track in the folder, with artwork, bold title, and
+            // artist name. Skipped tracks show with a line through them; tapping one
+            // un-skips it and plays it. Scrolling this list is what drives the artwork
+            // collapse above (see nestedScrollConnection). Past the end of the list,
+            // suggested albums appear so the user can keep listening without leaving
+            // this screen.
             key(skipRefreshTick) {
-                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                LazyColumn(state = listState, modifier = Modifier.fillMaxSize()) {
+                    item {
+                        Text(
+                            "PLAYLIST",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp)
+                        )
+                    }
                     itemsIndexed(state.fullTrackList) { _, track ->
                         val trackUriStr = track.uri.toString()
                         val isSkipped = folderUri != null && skipListViewModel.isSkipped(folderUri, trackUriStr)
@@ -223,9 +315,89 @@ fun PlayerScreen(
                             }
                         )
                     }
+                    if (recommendations.isNotEmpty()) {
+                        item {
+                            RecommendationsSection(
+                                title = if (recommendationsAreFromSameFolder) "MORE FROM THIS FOLDER" else "FROM YOUR LIBRARY",
+                                playlists = recommendations,
+                                metadataViewModel = metadataViewModel,
+                                onPlaylistClick = onPlayRecommendation
+                            )
+                        }
+                    }
+                    item { Spacer(modifier = Modifier.height(24.dp)) }
                 }
             }
         }
+    }
+}
+
+/**
+ * End-of-playlist recommendations: a horizontally-scrolling row of other albums, shown
+ * once the user has scrolled past the current playlist's own tracks - sibling albums from
+ * the same parent folder when there are any, otherwise a sample from the rest of the
+ * library.
+ */
+@Composable
+private fun RecommendationsSection(
+    title: String,
+    playlists: List<Playlist>,
+    metadataViewModel: MetadataViewModel,
+    onPlaylistClick: (Playlist) -> Unit
+) {
+    Column(modifier = Modifier.padding(top = 16.dp)) {
+        HorizontalDivider(
+            modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
+        )
+        Text(
+            title,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(start = 24.dp, end = 24.dp, bottom = 8.dp)
+        )
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 24.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            items(playlists, key = { it.folderUri.toString() }) { playlist ->
+                RecommendationCard(
+                    playlist = playlist,
+                    metadataViewModel = metadataViewModel,
+                    onClick = { onPlaylistClick(playlist) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun RecommendationCard(
+    playlist: Playlist,
+    metadataViewModel: MetadataViewModel,
+    onClick: () -> Unit
+) {
+    Column(modifier = Modifier.width(120.dp).clickable(onClick = onClick)) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(1f)
+                .clip(RoundedCornerShape(8.dp))
+                .background(SurfaceCard)
+        ) {
+            TrackArtwork(
+                track = playlist.tracks.firstOrNull(),
+                metadataViewModel = metadataViewModel,
+                modifier = Modifier.fillMaxSize()
+            )
+        }
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = playlist.name,
+            style = MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
 
@@ -365,20 +537,16 @@ private fun PlaybackControls(state: PlayerUiState, viewModel: PlayerViewModel, b
     }
 }
 
-/**
- * Vertical volume slider, sized to sit beside the artwork/title block without reaching
- * down into the transport controls below it. Built by rotating a standard Slider 270°
- * and swapping its reported width/height, since Material3 has no vertical Slider variant.
- */
+/** Horizontal volume slider - icon, slider, icon - sitting below the transport controls. */
 @Composable
-private fun VerticalVolumeControl(state: PlayerUiState, viewModel: PlayerViewModel, modifier: Modifier = Modifier) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = modifier) {
+private fun HorizontalVolumeControl(state: PlayerUiState, viewModel: PlayerViewModel) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Icon(
-            Icons.AutoMirrored.Filled.VolumeUp,
+            Icons.AutoMirrored.Filled.VolumeDown,
             contentDescription = null,
-            modifier = Modifier.size(14.dp)
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
         )
-        Spacer(modifier = Modifier.height(4.dp))
         Slider(
             value = state.volume,
             onValueChange = { viewModel.setVolume(it) },
@@ -387,32 +555,13 @@ private fun VerticalVolumeControl(state: PlayerUiState, viewModel: PlayerViewMod
                 thumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
                 activeTrackColor = MaterialTheme.colorScheme.onSurfaceVariant
             ),
-            modifier = Modifier
-                .height(72.dp)
-                .width(24.dp)
-                .graphicsLayer {
-                    rotationZ = 270f
-                    transformOrigin = TransformOrigin(0f, 0f)
-                }
-                .layout { measurable, constraints ->
-                    val placeable = measurable.measure(
-                        Constraints(
-                            minWidth = constraints.minHeight,
-                            maxWidth = constraints.maxHeight,
-                            minHeight = constraints.minWidth,
-                            maxHeight = constraints.maxWidth
-                        )
-                    )
-                    layout(placeable.height, placeable.width) {
-                        placeable.place(-placeable.width, 0)
-                    }
-                }
+            modifier = Modifier.weight(1f).padding(horizontal = 8.dp)
         )
-        Spacer(modifier = Modifier.height(4.dp))
         Icon(
-            Icons.AutoMirrored.Filled.VolumeDown,
+            Icons.AutoMirrored.Filled.VolumeUp,
             contentDescription = null,
-            modifier = Modifier.size(14.dp)
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(16.dp)
         )
     }
 }

@@ -91,7 +91,8 @@ fun AppNavHost() {
                                 }
                             },
                             onViewClick = { showViewSheet = true },
-                            onSearchClick = { navController.navigate(Routes.SEARCH) }
+                            onSearchClick = { navController.navigate(Routes.SEARCH) },
+                            onNowPlayingClick = { navController.navigate(Routes.PLAYER) }
                         )
                     }
                 }
@@ -202,7 +203,11 @@ fun AppNavHost() {
                         viewModel = playerViewModel,
                         metadataViewModel = metadataViewModel,
                         skipListViewModel = skipListViewModel,
-                        onCollapse = { navController.popBackStack() }
+                        libraryViewModel = libraryViewModel,
+                        onCollapse = { navController.popBackStack() },
+                        onPlayRecommendation = { playlist ->
+                            playerViewModel.playPlaylist(playlist, forceRestart = true)
+                        }
                     )
                 }
                 composable(Routes.SETTINGS) {

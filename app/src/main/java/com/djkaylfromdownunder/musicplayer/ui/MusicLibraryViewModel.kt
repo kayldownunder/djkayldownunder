@@ -74,6 +74,17 @@ class MusicLibraryViewModel(application: Application) : AndroidViewModel(applica
     }
 
     /**
+     * Fresh, on-demand recursive scan of the whole library tree, independent of the
+     * cached [state] flow. Used by Settings' "Fetch Metadata for All Playlists" so it
+     * isn't blocked by [state] still being [LibraryState.Loading]/[LibraryState.Error] -
+     * the same underlying repository call individual folder sync icons already rely on.
+     */
+    suspend fun scanAllPlaylists(): List<Playlist> {
+        val root = _rootUri.value ?: return emptyList()
+        return repository.scanPlaylists(root)
+    }
+
+    /**
      * Resolves any folder - leaf or branching, any depth - into one playable Playlist of
      * everything nested inside it. Used to favorite/sync a whole branching folder (e.g. an
      * artist folder with several albums) as a single unit.

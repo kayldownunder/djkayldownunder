@@ -2,7 +2,7 @@ package com.djkaylfromdownunder.musicplayer.data
 
 import android.content.Context
 
-enum class PlaylistViewMode { LARGE, MEDIUM, SMALL, LIST }
+enum class PlaylistViewMode { MEDIUM, SMALL, LIST }
 
 class ViewPreferenceRepository(context: Context) {
 

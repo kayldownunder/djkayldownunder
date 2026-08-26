@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.LibraryMusic
+import androidx.compose.material.icons.filled.PlayCircleFilled
 import androidx.compose.material.icons.filled.PlaylistAdd
 import androidx.compose.material.icons.filled.QueueMusic
 import androidx.compose.material.icons.filled.Search
@@ -22,12 +23,23 @@ fun AppBottomNav(
     currentRoute: String?,
     onNavigate: (String) -> Unit,
     onViewClick: () -> Unit,
-    onSearchClick: () -> Unit
+    onSearchClick: () -> Unit,
+    onNowPlayingClick: () -> Unit
 ) {
-    // alwaysShowLabel = true on every tab so all seven labels are always visible, not
+    // alwaysShowLabel = true on every tab so all labels are always visible, not
     // just the selected one - taller than the Material3 default (80dp) to give the
     // icon+label pairs room to breathe with that many items.
     NavigationBar(containerColor = SurfaceDark, modifier = Modifier.height(144.dp)) {
+        // Far left, ahead of every other tab - jumps straight to the full Now Playing
+        // screen regardless of which tab is currently selected.
+        NavigationBarItem(
+            selected = currentRoute == Routes.PLAYER,
+            onClick = onNowPlayingClick,
+            icon = { Icon(Icons.Default.PlayCircleFilled, contentDescription = "Currently Playing") },
+            label = { Text("Playing") },
+            alwaysShowLabel = true,
+            colors = NavigationBarItemDefaults.colors(indicatorColor = Color.Transparent)
+        )
         NavigationBarItem(
             selected = currentRoute == Routes.PLAYLISTS,
             onClick = { onNavigate(Routes.PLAYLISTS) },

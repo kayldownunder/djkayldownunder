@@ -82,59 +82,58 @@ fun PlaylistGridCard(
                 modifier = Modifier.fillMaxSize()
             )
 
-            // Heart and sync sit top-left; delete sits top-right - as far apart as the
-            // card allows, so the destructive action is never next to the other two.
-            Row(
-                modifier = Modifier.align(Alignment.TopStart).padding(6.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-                verticalAlignment = Alignment.CenterVertically
+            // Heart sits top-left, sync sits top-right (as far apart as the card allows),
+            // delete sits bottom-right below the sync button - the destructive action is
+            // kept clear of both other actions and away from the top row entirely.
+            Box(
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(6.dp)
+                    .size(badgeSize)
+                    .clip(CircleShape)
+                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
+                    .clickable { favoritesViewModel.toggleFavorite(favoriteKey) },
+                contentAlignment = Alignment.Center
             ) {
+                Icon(
+                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                    tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(if (compact) 14.dp else 18.dp)
+                )
+            }
+            if (!isSynced) {
                 Box(
                     modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
                         .size(badgeSize)
                         .clip(CircleShape)
                         .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
-                        .clickable { favoritesViewModel.toggleFavorite(favoriteKey) },
+                        .clickable(enabled = !isAnyFetchRunning) {
+                            metadataViewModel.fetchMetadataForPlaylist(playlist)
+                        },
                     contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                        tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(if (compact) 14.dp else 18.dp)
-                    )
-                }
-                if (!isSynced) {
-                    Box(
-                        modifier = Modifier
-                            .size(badgeSize)
-                            .clip(CircleShape)
-                            .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
-                            .clickable(enabled = !isAnyFetchRunning) {
-                                metadataViewModel.fetchMetadataForPlaylist(playlist)
-                            },
-                        contentAlignment = Alignment.Center
-                    ) {
-                        if (isFetchingThis) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(if (compact) 12.dp else 16.dp),
-                                strokeWidth = 2.dp,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        } else {
-                            Icon(
-                                imageVector = Icons.Default.Download,
-                                contentDescription = "Fetch metadata for ${playlist.name}",
-                                modifier = Modifier.size(if (compact) 14.dp else 18.dp)
-                            )
-                        }
+                    if (isFetchingThis) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(if (compact) 12.dp else 16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Fetch metadata for ${playlist.name}",
+                            modifier = Modifier.size(if (compact) 14.dp else 18.dp)
+                        )
                     }
                 }
             }
             if (onDelete != null) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
+                        .align(Alignment.BottomEnd)
                         .padding(6.dp)
                         .size(badgeSize)
                         .clip(CircleShape)
@@ -159,26 +158,30 @@ fun PlaylistGridCard(
                 }
             }
         }
-        Spacer(modifier = Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(if (compact) 4.dp else 8.dp))
         Text(
             text = playlist.name,
             style = if (compact) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
                     else MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
             maxLines = 1
         )
-        Text(
-            // Reading progressState.value here (rather than a value hoisted above) means
-            // only the actively-fetching card's Text recomposes on each tick - every other
-            // card takes the untouched trackCount branch below.
-            text = if (isFetchingThis) {
-                val p = progressState.value
-                "Fetching ${p.completedTracks}/${p.totalTracks}…"
-            } else {
-                "${playlist.trackCount} tracks"
-            },
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+        // Dropped in compact/Small mode (unless actively fetching) to keep the dense
+        // 3-per-row grid's tiles short, so more albums fit on screen at once.
+        if (isFetchingThis || !compact) {
+            Text(
+                // Reading progressState.value here (rather than a value hoisted above) means
+                // only the actively-fetching card's Text recomposes on each tick - every other
+                // card takes the untouched trackCount branch below.
+                text = if (isFetchingThis) {
+                    val p = progressState.value
+                    "Fetching ${p.completedTracks}/${p.totalTracks}…"
+                } else {
+                    "${playlist.trackCount} tracks"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
     }
 
     if (showDeleteDialog) {

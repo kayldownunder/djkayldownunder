@@ -3,12 +3,14 @@ package com.djkaylfromdownunder.musicplayer.data
 import android.annotation.SuppressLint
 import android.content.Context
 import android.net.Uri
+import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 
+private const val TAG = "MetadataStore"
 private const val METADATA_FOLDER_NAME = "metadata"
 private const val METADATA_FILE_NAME = "track_metadata.json"
 
@@ -112,6 +114,7 @@ class MetadataStore private constructor(private val context: Context) {
             mergeFrom(externalText)
             externalFile = file
             save()
+            Log.i(TAG, "Attached metadata store at ${file.uri} (${cache.size} entries)")
 
             if (internalFallbackFile.exists()) {
                 internalFallbackFile.delete()
@@ -119,6 +122,7 @@ class MetadataStore private constructor(private val context: Context) {
         } catch (e: Exception) {
             // SAF permission may have lapsed (e.g. after a flash, before the folder is
             // re-picked) - keep using whatever's already cached/internal for now.
+            Log.w(TAG, "Couldn't attach metadata store under $rootUri, falling back to internal storage", e)
         }
     }
 
@@ -162,9 +166,10 @@ class MetadataStore private constructor(private val context: Context) {
                 context.contentResolver.openOutputStream(target.uri, "wt")?.use {
                     it.write(text.toByteArray())
                 }
-            }
+            }.onFailure { Log.w(TAG, "Failed writing metadata store to ${target.uri}", it) }
         } else {
             runCatching { internalFallbackFile.writeText(text) }
+                .onFailure { Log.w(TAG, "Failed writing internal fallback metadata store", it) }
         }
     }
 
