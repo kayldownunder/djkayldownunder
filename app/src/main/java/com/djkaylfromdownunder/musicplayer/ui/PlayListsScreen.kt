@@ -1,0 +1,90 @@
+package com.djkaylfromdownunder.musicplayer.ui
+
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.djkaylfromdownunder.musicplayer.data.Playlist
+import com.djkaylfromdownunder.musicplayer.data.PlaylistViewMode
+
+@Composable
+fun PlayListsScreen(
+    libraryViewModel: MusicLibraryViewModel,
+    metadataViewModel: MetadataViewModel,
+    favoritesViewModel: FavoritesViewModel,
+    customPlaylistViewModel: CustomPlaylistViewModel,
+    viewPreferencesViewModel: ViewPreferencesViewModel,
+    onPlaylistClick: (Playlist) -> Unit
+) {
+    val libraryState by libraryViewModel.state.collectAsState()
+    val viewMode by viewPreferencesViewModel.viewMode.collectAsState()
+    val customMetas by customPlaylistViewModel.playlists.collectAsState()
+
+    val folderPlaylists = (libraryState as? LibraryState.Loaded)?.playlists.orEmpty()
+    val allTracks = remember(folderPlaylists) { folderPlaylists.flatMap { it.tracks } }
+    val customPlaylists = remember(customMetas, allTracks) {
+        customMetas.map { customPlaylistViewModel.resolve(it, allTracks) }
+    }
+    val allPlaylists = customPlaylists + folderPlaylists
+
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Text("Play Lists", style = MaterialTheme.typography.headlineLarge)
+        }
+
+        if (allPlaylists.isEmpty()) {
+            Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                Text(
+                    "No playlists yet. Choose a music folder in Settings, or create a custom playlist.",
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center
+                )
+            }
+        } else if (viewMode == PlaylistViewMode.LIST) {
+            LazyColumn(
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(allPlaylists, key = { it.folderUri.toString() }) { playlist ->
+                    PlaylistRow(
+                        playlist = playlist,
+                        metadataViewModel = metadataViewModel,
+                        favoritesViewModel = favoritesViewModel,
+                        onClick = { onPlaylistClick(playlist) }
+                    )
+                }
+            }
+        } else {
+            val columns = when (viewMode) {
+                PlaylistViewMode.LARGE -> 1
+                PlaylistViewMode.SMALL -> 3
+                else -> 2
+            }
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(columns),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(allPlaylists, key = { it.folderUri.toString() }) { playlist ->
+                    PlaylistGridCard(
+                        playlist = playlist,
+                        metadataViewModel = metadataViewModel,
+                        favoritesViewModel = favoritesViewModel,
+                        compact = viewMode == PlaylistViewMode.SMALL,
+                        onClick = { onPlaylistClick(playlist) }
+                    )
+                }
+            }
+        }
+    }
+}
