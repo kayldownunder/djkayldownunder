@@ -22,6 +22,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.djkaylfromdownunder.musicplayer.data.FolderBrowseItem
 import com.djkaylfromdownunder.musicplayer.data.Playlist
@@ -64,8 +65,14 @@ fun FolderBrowserScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-            Text(folderName, style = MaterialTheme.typography.headlineLarge, maxLines = 1)
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Text(
+                folderName,
+                style = MaterialTheme.typography.headlineLarge,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         val current = items
@@ -161,14 +168,17 @@ private fun folderItemKey(item: FolderBrowseItem): String = when (item) {
  * inside it, then kicks off metadata fetching for that whole set - used by the sync icon
  * on a folder that isn't itself a playlist (it has subfolders, not tracks, directly
  * inside). Building the aggregate is a real SAF walk, so it's launched from a coroutine
- * rather than blocking composition.
+ * rather than blocking composition. Also (re)builds this folder's collage thumbnail from
+ * its subfolders' embedded art, the same way this button already refreshes metadata - see
+ * MusicFolderRepository.generateCollageThumbnail.
  */
 private fun syncSubFolder(
     scope: kotlinx.coroutines.CoroutineScope,
     libraryViewModel: MusicLibraryViewModel,
     metadataViewModel: MetadataViewModel,
     folderUri: Uri,
-    isResolving: (Boolean) -> Unit
+    isResolving: (Boolean) -> Unit,
+    onCollageGenerated: (Uri?) -> Unit
 ) {
     scope.launch {
         isResolving(true)
@@ -176,6 +186,8 @@ private fun syncSubFolder(
         if (aggregate != null) {
             metadataViewModel.fetchMetadataForPlaylist(aggregate)
         }
+        val collage = libraryViewModel.generateCollageThumbnail(folderUri)
+        if (collage != null) onCollageGenerated(collage)
         isResolving(false)
     }
 }
@@ -197,6 +209,18 @@ private fun SubFolderGridCard(
     // live status has to be observed separately (and reactively - see isFetchingThis)
     // rather than read once as a plain boolean, or the spinner can get stuck on or off.
     var isResolving by remember(item.uri) { mutableStateOf(false) }
+    // A previously-generated collage (see MusicFolderRepository.generateCollageThumbnail)
+    // shows in place of the generic folder icon once found/built - null means "none yet",
+    // not "still loading", since there may genuinely never be one until synced.
+    var collageUri by remember(item.uri) { mutableStateOf<Uri?>(null) }
+    // A custom cover image dropped directly into this folder (e.g. a picture placed
+    // straight inside "AC/DC" alongside its Album subfolders) overrides the generated
+    // collage automatically - no manual "set cover" step needed.
+    var customCoverUri by remember(item.uri) { mutableStateOf<Uri?>(null) }
+    LaunchedEffect(item.uri) {
+        customCoverUri = libraryViewModel.findFolderCoverImage(item.uri)
+        collageUri = libraryViewModel.findCollageThumbnail(item.uri)
+    }
     val scope = rememberCoroutineScope()
     val favoriteKeys by favoritesViewModel.favoriteKeys.collectAsState()
     val favoriteKey = item.uri.toString()
@@ -226,12 +250,22 @@ private fun SubFolderGridCard(
                 .background(SurfaceCard),
             contentAlignment = Alignment.Center
         ) {
-            Icon(
-                imageVector = Icons.Default.Folder,
-                contentDescription = null,
-                modifier = Modifier.size(if (compact) 32.dp else 44.dp),
-                tint = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            val cover = customCoverUri ?: collageUri
+            if (cover != null) {
+                coil.compose.AsyncImage(
+                    model = cover,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            } else {
+                Icon(
+                    imageVector = Icons.Default.Folder,
+                    contentDescription = null,
+                    modifier = Modifier.size(if (compact) 32.dp else 44.dp),
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
 
             // Heart sits top-left, sync sits top-right, delete sits bottom-right - kept
             // clear of both other actions since it's destructive. A whole branching
@@ -262,7 +296,11 @@ private fun SubFolderGridCard(
                     .clip(CircleShape)
                     .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
                     .clickable(enabled = canSync) {
-                        syncSubFolder(scope, libraryViewModel, metadataViewModel, item.uri) { isResolving = it }
+                        syncSubFolder(
+                            scope, libraryViewModel, metadataViewModel, item.uri,
+                            isResolving = { isResolving = it },
+                            onCollageGenerated = { collageUri = it }
+                        )
                     },
                 contentAlignment = Alignment.Center
             ) {
@@ -342,6 +380,16 @@ private fun SubFolderListRow(
     // live status has to be observed separately (and reactively - see isFetchingThis)
     // rather than read once as a plain boolean, or the spinner can get stuck on or off.
     var isResolving by remember(item.uri) { mutableStateOf(false) }
+    // A previously-generated collage (see MusicFolderRepository.generateCollageThumbnail)
+    // shows in place of the generic folder icon once found/built.
+    var collageUri by remember(item.uri) { mutableStateOf<Uri?>(null) }
+    // A custom cover image dropped directly into this folder overrides the generated
+    // collage automatically - no manual "set cover" step needed.
+    var customCoverUri by remember(item.uri) { mutableStateOf<Uri?>(null) }
+    LaunchedEffect(item.uri) {
+        customCoverUri = libraryViewModel.findFolderCoverImage(item.uri)
+        collageUri = libraryViewModel.findCollageThumbnail(item.uri)
+    }
     val scope = rememberCoroutineScope()
     val favoriteKeys by favoritesViewModel.favoriteKeys.collectAsState()
     val favoriteKey = item.uri.toString()
@@ -369,7 +417,17 @@ private fun SubFolderListRow(
                 .background(SurfaceCard),
             contentAlignment = Alignment.Center
         ) {
-            Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            val cover = customCoverUri ?: collageUri
+            if (cover != null) {
+                coil.compose.AsyncImage(
+                    model = cover,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            } else {
+                Icon(Icons.Default.Folder, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
         }
         Spacer(modifier = Modifier.width(12.dp))
         Text(
@@ -391,7 +449,11 @@ private fun SubFolderListRow(
             }
         } else {
             IconButton(onClick = {
-                syncSubFolder(scope, libraryViewModel, metadataViewModel, item.uri) { isResolving = it }
+                syncSubFolder(
+                    scope, libraryViewModel, metadataViewModel, item.uri,
+                    isResolving = { isResolving = it },
+                    onCollageGenerated = { collageUri = it }
+                )
             }) {
                 Icon(imageVector = Icons.Default.Download, contentDescription = "Fetch metadata for ${item.name}")
             }

@@ -39,8 +39,6 @@ object Routes {
     const val SETTINGS = "settings"
     const val SKIP_REVIEW = "skip_review"
     const val SEARCH = "search"
-    const val CUSTOMIZE_DOCK = "customize_dock"
-    const val REARRANGE_SETTINGS = "rearrange_settings"
     const val FOLDER_PATTERN = "folder/{encodedUri}/{encodedName}"
 
     /** Builds a navigable route for a specific folder, URL-encoding its URI and name. */
@@ -77,8 +75,7 @@ fun AppNavHost() {
 
     // Full-screen destinations that hide the mini-player/bottom nav entirely.
     val hideBottomBarRoutes = setOf(
-        Routes.PLAYER, Routes.SKIP_REVIEW, Routes.SEARCH, Routes.CREATE_PLAYLIST,
-        Routes.CUSTOMIZE_DOCK, Routes.REARRANGE_SETTINGS
+        Routes.PLAYER, Routes.SKIP_REVIEW, Routes.SEARCH, Routes.CREATE_PLAYLIST
     )
 
     val visibleDockIds by dockPreferencesViewModel.visibleIds.collectAsState()
@@ -103,7 +100,8 @@ fun AppNavHost() {
                                 }
                             },
                             onPushNavigate = { route -> navController.navigate(route) },
-                            onViewClick = { showViewSheet = true }
+                            onViewClick = { showViewSheet = true },
+                            onReorder = { ids -> dockPreferencesViewModel.setOrderedIds(ids) }
                         )
                     }
                 }
@@ -229,24 +227,10 @@ fun AppNavHost() {
                             themeViewModel = themeViewModel,
                             fontPreferencesViewModel = fontPreferencesViewModel,
                             settingsLayoutViewModel = settingsLayoutViewModel,
-                            onNavigateToSkipReview = { navController.navigate(Routes.SKIP_REVIEW) },
-                            onNavigateToCustomizeDock = { navController.navigate(Routes.CUSTOMIZE_DOCK) },
-                            onNavigateToRearrangeSettings = { navController.navigate(Routes.REARRANGE_SETTINGS) }
+                            dockPreferencesViewModel = dockPreferencesViewModel,
+                            onNavigateToSkipReview = { navController.navigate(Routes.SKIP_REVIEW) }
                         )
                     }
-                }
-                composable(Routes.CUSTOMIZE_DOCK) {
-                    CustomizeDockScreen(
-                        dockPreferencesViewModel = dockPreferencesViewModel,
-                        onBack = { navController.popBackStack() }
-                    )
-                }
-                composable(Routes.REARRANGE_SETTINGS) {
-                    RearrangeSettingsScreen(
-                        settingsLayoutViewModel = settingsLayoutViewModel,
-                        themeViewModel = themeViewModel,
-                        onBack = { navController.popBackStack() }
-                    )
                 }
                 composable(Routes.SKIP_REVIEW) {
                     SkipReviewScreen(

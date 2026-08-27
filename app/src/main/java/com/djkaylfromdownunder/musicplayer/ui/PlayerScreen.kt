@@ -39,7 +39,7 @@ import com.djkaylfromdownunder.musicplayer.ui.theme.BackgroundBlack
 import com.djkaylfromdownunder.musicplayer.ui.theme.SurfaceCard
 
 // Artwork shrinks from this height down to nothing as the track list below is scrolled.
-private val MAX_ARTWORK_HEIGHT = 300.dp
+private val MAX_ARTWORK_HEIGHT = 380.dp
 
 @Composable
 fun PlayerScreen(
@@ -52,9 +52,24 @@ fun PlayerScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
 
+    // The shared library scan (libraryState) is normally already warm by the time the
+    // user opens a track, but on a very large library it can still be mid-scan (or not
+    // yet started) the first time this screen is reached in a session - which used to
+    // leave "more from this folder"/"your library" silently empty for whatever happened
+    // to be playing at that moment, looking like it only worked for "some" playlists when
+    // really it was a timing race, not anything specific to the playlist itself. If the
+    // shared scan isn't ready yet, fall back to one dedicated on-demand scan (same call
+    // Settings' "Fetch Metadata for All Playlists" already relies on) so recommendations
+    // are always populated regardless of that timing.
     val libraryState by libraryViewModel.state.collectAsState()
-    val allPlaylists = remember(libraryState) {
-        (libraryState as? LibraryState.Loaded)?.playlists.orEmpty()
+    var fallbackPlaylists by remember { mutableStateOf<List<Playlist>?>(null) }
+    LaunchedEffect(libraryState) {
+        if (libraryState !is LibraryState.Loaded && fallbackPlaylists == null) {
+            fallbackPlaylists = libraryViewModel.scanAllPlaylists()
+        }
+    }
+    val allPlaylists = remember(libraryState, fallbackPlaylists) {
+        (libraryState as? LibraryState.Loaded)?.playlists ?: fallbackPlaylists.orEmpty()
     }
 
     // Other albums to suggest once the user scrolls past the current playlist: sibling
@@ -124,20 +139,20 @@ fun PlayerScreen(
                 )
             )
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(top = 4.dp, start = 24.dp, end = 24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+        Box(
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 4.dp, start = 24.dp, end = 24.dp)
         ) {
-            IconButton(onClick = onCollapse) {
+            IconButton(
+                onClick = onCollapse,
+                modifier = Modifier.align(Alignment.CenterStart)
+            ) {
                 Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse")
             }
             Text(
                 "NOW PLAYING",
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
+                style = MaterialTheme.typography.headlineLarge,
+                modifier = Modifier.align(Alignment.Center)
             )
-            Spacer(modifier = Modifier.width(48.dp)) // balance the back icon
         }
 
         // Skip-this-song controls: tick to always skip this track in this playlist from
@@ -155,8 +170,21 @@ fun PlayerScreen(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
+                // Left to right: volume, then the orange Skip button, then - grouped
+                // together at the right edge for functional pairing - the "skip next
+                // time" checkbox/label sitting right beside the trash icon.
                 CompactVerticalVolumeControl(state = state, viewModel = viewModel)
                 Spacer(modifier = Modifier.width(12.dp))
+                Button(
+                    onClick = { viewModel.skipNext() },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text("Skip")
+                }
+                Spacer(modifier = Modifier.weight(1f))
                 Checkbox(
                     checked = isSkipMarked,
                     onCheckedChange = { checked ->
@@ -170,14 +198,7 @@ fun PlayerScreen(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
-                Spacer(modifier = Modifier.width(12.dp))
-                TextButton(onClick = { viewModel.skipNext() }) {
-                    Text("Skip")
-                }
-                Spacer(modifier = Modifier.weight(1f))
-                // Grouped with the other song-management actions (skip) rather than
-                // sitting among the transport controls (previous/play/next) below, and
-                // pushed to the far right edge to stay clear of Skip.
+                Spacer(modifier = Modifier.width(8.dp))
                 IconButton(onClick = { showDeleteDialog = true }) {
                     Icon(
                         Icons.Default.Delete,
@@ -214,7 +235,7 @@ fun PlayerScreen(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(artHeightDp)
-                        .padding(horizontal = 32.dp, vertical = 8.dp)
+                        .padding(horizontal = 24.dp, vertical = 8.dp)
                         .graphicsLayer { alpha = artFraction },
                     contentAlignment = Alignment.Center
                 ) {
@@ -642,12 +663,12 @@ private fun CompactVerticalVolumeControl(state: PlayerUiState, viewModel: Player
     }
 
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(onClick = { step(0.1f) }, modifier = Modifier.size(22.dp)) {
+        IconButton(onClick = { step(0.1f) }, modifier = Modifier.size(32.dp)) {
             Icon(
                 Icons.Default.Add,
                 contentDescription = "Increase volume",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(14.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
         Slider(
@@ -661,8 +682,8 @@ private fun CompactVerticalVolumeControl(state: PlayerUiState, viewModel: Player
             // Built by rotating a standard Slider 270° and swapping its reported
             // width/height, since Material3 has no vertical Slider variant.
             modifier = Modifier
-                .height(56.dp)
-                .width(20.dp)
+                .height(28.dp)
+                .width(16.dp)
                 .graphicsLayer {
                     rotationZ = 270f
                     transformOrigin = TransformOrigin(0f, 0f)
@@ -681,12 +702,12 @@ private fun CompactVerticalVolumeControl(state: PlayerUiState, viewModel: Player
                     }
                 }
         )
-        IconButton(onClick = { step(-0.1f) }, modifier = Modifier.size(22.dp)) {
+        IconButton(onClick = { step(-0.1f) }, modifier = Modifier.size(32.dp)) {
             Icon(
                 Icons.Default.Remove,
                 contentDescription = "Decrease volume",
                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(14.dp)
+                modifier = Modifier.size(20.dp)
             )
         }
     }

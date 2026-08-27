@@ -36,8 +36,13 @@ fun PlayListsScreen(
     val allPlaylists = customPlaylists + folderPlaylists
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
-            Text("Play Lists", style = MaterialTheme.typography.headlineLarge)
+        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+            Text(
+                "Play Lists",
+                style = MaterialTheme.typography.headlineLarge,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         if (allPlaylists.isEmpty()) {

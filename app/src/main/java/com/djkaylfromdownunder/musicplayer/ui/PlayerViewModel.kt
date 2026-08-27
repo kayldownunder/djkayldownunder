@@ -55,9 +55,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val sessionToken = SessionToken(context, ComponentName(context, MusicPlaybackService::class.java))
         val controllerFuture = MediaController.Builder(context, sessionToken).buildAsync()
         controllerFuture.addListener({
-            controller = controllerFuture.get()
-            Log.d(TAG, "MediaController connected")
-            attachListener()
+            // TEMPORARY DEBUG LOGGING (TAG) - added to chase down a playback lockup where
+            // the player stops responding entirely (no audio, taps do nothing) until the
+            // phone is rebooted, reported after moving files / updating metadata. Remove
+            // once the cause is confirmed from a captured logcat.
+            try {
+                controller = controllerFuture.get()
+                Log.d(TAG, "MediaController connected")
+                attachListener()
+            } catch (e: Exception) {
+                Log.e(TAG, "MediaController failed to connect - playback will silently do nothing until this succeeds", e)
+            }
         }, MoreExecutors.directExecutor())
         observePosition()
     }
@@ -65,6 +73,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private fun attachListener() {
         controller?.addListener(object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
+                Log.d(TAG, "onIsPlayingChanged isPlaying=$isPlaying playbackState=${controller?.playbackState}")
                 _uiState.value = _uiState.value.copy(isPlaying = isPlaying)
                 if (!isPlaying) saveProgress()
             }
@@ -72,11 +81,41 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val index = controller?.currentMediaItemIndex ?: -1
                 val track = currentQueue.getOrNull(index)
-                Log.d(TAG, "onMediaItemTransition index=$index track=${track?.displayName}")
+                Log.d(TAG, "onMediaItemTransition index=$index track=${track?.displayName} reason=$reason")
                 _uiState.value = _uiState.value.copy(
                     currentTrack = track,
                     currentIndex = index,
                     durationMs = controller?.duration?.coerceAtLeast(0) ?: 0L
+                )
+            }
+
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                val stateName = when (playbackState) {
+                    Player.STATE_IDLE -> "IDLE"
+                    Player.STATE_BUFFERING -> "BUFFERING"
+                    Player.STATE_READY -> "READY"
+                    Player.STATE_ENDED -> "ENDED"
+                    else -> "UNKNOWN($playbackState)"
+                }
+                Log.d(TAG, "onPlaybackStateChanged state=$stateName currentTrack=${_uiState.value.currentTrack?.displayName}")
+            }
+
+            // This is the gap most likely behind "playback locks up and won't respond until
+            // reboot": if ExoPlayer hits an unrecoverable error (e.g. a track's content Uri
+            // became invalid after being moved/renamed), nothing was previously listening
+            // for it - isPlaying just silently goes false with no record of why, indistinguishable
+            // from a normal pause. Logged with full detail so a captured logcat pinpoints
+            // exactly which track/error caused it.
+            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                Log.e(
+                    TAG,
+                    "onPlayerError code=${error.errorCode} (${error.errorCodeName}) " +
+                        "currentIndex=${controller?.currentMediaItemIndex} " +
+                        "currentTrack=${_uiState.value.currentTrack?.displayName} " +
+                        "currentTrackUri=${_uiState.value.currentTrack?.uri} " +
+                        "playWhenReady=${controller?.playWhenReady} " +
+                        "playbackState=${controller?.playbackState}",
+                    error
                 )
             }
         })
@@ -170,6 +209,21 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             setMediaItems(mediaItems, startIndex, startPositionMs)
             prepare()
             play()
+            // A resume position saved from a previous full play-through can land at or
+            // past the track's actual duration - ExoPlayer then reaches STATE_ENDED
+            // immediately instead of audibly playing anything, and play() alone can't
+            // recover from ENDED (it just sets playWhenReady, which has nothing left to
+            // play). Catch that on the very next state change and restart from the top.
+            addListener(object : Player.Listener {
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    removeListener(this)
+                    if (playbackState == Player.STATE_ENDED) {
+                        Log.d(TAG, "playPlaylist landed on STATE_ENDED immediately - restarting from top")
+                        seekTo(startIndex, 0L)
+                        play()
+                    }
+                }
+            })
         }
         _uiState.value = _uiState.value.copy(
             queue = effectiveTracks,
@@ -180,7 +234,17 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     fun togglePlayPause() {
-        controller?.let { c -> if (c.isPlaying) c.pause() else c.play() }
+        controller?.let { c ->
+            if (c.isPlaying) {
+                c.pause()
+            } else {
+                // Once playback reaches STATE_ENDED (e.g. the queue played through to the
+                // end), play() alone won't restart it - it only sets playWhenReady, and
+                // there's nothing left queued up to play. Seek back to the start first.
+                if (c.playbackState == Player.STATE_ENDED) c.seekTo(0, 0L)
+                c.play()
+            }
+        }
     }
 
     fun skipNext() = controller?.seekToNextMediaItem()

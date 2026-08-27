@@ -8,9 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Backs both the Settings screen itself (renders blocks in whatever [order] resolves to)
- * and the "Rearrange Settings Layout" editor. The editor works on a local draft and only
- * calls [setOrder] once, on leaving the screen - see RearrangeSettingsScreen.
+ * Backs the Settings screen (renders blocks in whatever [order] resolves to). Dragging a
+ * shortcut in place calls [setOrder] immediately on every slot change - there's no separate
+ * editor screen or draft/commit step.
  */
 class SettingsLayoutViewModel(application: Application) : AndroidViewModel(application) {
 

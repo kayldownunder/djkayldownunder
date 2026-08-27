@@ -8,10 +8,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
 /**
- * Backs both the bottom dock itself (AppBottomNav renders whatever [visibleIds] resolves
- * to) and the "Customise Bottom Dock" editor screen. Edits in that screen are applied to a
- * local draft and only committed here via [setOrderedIds] on the way out (see
- * CustomizeDockScreen's auto-save-on-back).
+ * Backs the bottom dock (AppBottomNav renders whatever [visibleIds] resolves to). Dragging
+ * an icon in the live dock calls [setOrderedIds] immediately on every slot change - there's
+ * no separate editor screen or draft/commit step.
  */
 class DockPreferencesViewModel(application: Application) : AndroidViewModel(application) {
 
@@ -20,11 +19,27 @@ class DockPreferencesViewModel(application: Application) : AndroidViewModel(appl
     private val _visibleIds = MutableStateFlow(resolveStoredIds(repository.getOrderedIds()))
     val visibleIds: StateFlow<List<String>> = _visibleIds.asStateFlow()
 
-    /** Persists a new order/subset of dock item ids - called once, on leaving the editor. */
+    /** Persists a new order/subset of dock item ids - called on every drag reorder. */
     fun setOrderedIds(ids: List<String>) {
         val cleaned = ids.filter { id -> ALL_DOCK_ITEMS.any { it.id == id } }.ifEmpty { DEFAULT_DOCK_ORDER }
         repository.setOrderedIds(cleaned)
         _visibleIds.value = cleaned
+    }
+
+    /**
+     * Shows or hides one dock icon, keeping every other icon's existing order untouched.
+     * A newly-shown icon is appended at the end rather than reinserted at its old spot -
+     * simpler than remembering where it used to sit, and it's just a drag away from
+     * wherever the user actually wants it.
+     */
+    fun setVisible(id: String, visible: Boolean) {
+        val current = _visibleIds.value
+        val updated = if (visible) {
+            if (id in current) current else current + id
+        } else {
+            current - id
+        }
+        setOrderedIds(updated)
     }
 
     fun resolve(ids: List<String>): List<DockItemDef> {

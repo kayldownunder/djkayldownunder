@@ -1,6 +1,9 @@
 package com.djkaylfromdownunder.musicplayer.data
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Canvas
 import android.net.Uri
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
@@ -272,7 +275,149 @@ class MusicFolderRepository(private val context: Context) {
         val ext = name.substringAfterLast('.', "").lowercase()
         return ext in IMAGE_EXTENSIONS
     }
+
+    /**
+     * Returns a previously-generated collage thumbnail for a branching folder (see
+     * [generateCollageThumbnail]) without doing any of the work to build one, so browsing
+     * the Library can show whatever's already cached without a rescan. Null if none has
+     * been generated yet, or no root/MetaData folder exists.
+     */
+    suspend fun findCollageThumbnail(rootUri: Uri, folderUri: Uri): Uri? = withContext(Dispatchers.IO) {
+        val root = DocumentFile.fromTreeUri(context, rootUri) ?: return@withContext null
+        val metadataFolder = root.findFile(METADATA_FOLDER_NAME)?.takeIf { it.isDirectory } ?: return@withContext null
+        metadataFolder.findFile(collageFileName(folderUri))?.uri
+    }
+
+    /**
+     * Builds (or rebuilds) a thumbnail for a branching folder - one that contains other
+     * album subfolders rather than tracks directly (e.g. an artist folder holding several
+     * album subfolders, like "AC/DC") - by compositing up to 4 of its subfolders' own cover
+     * art into a single square collage image, and saves it into the shared MetaData folder
+     * the same way [consolidateArtworkImages] already treats stray album art: generated
+     * images live and persist there rather than being recomputed every time or scattered
+     * across the library. Source art comes only from tracks' embedded artwork (no network
+     * fetch), so this works offline and doesn't depend on online metadata having been
+     * fetched first. Returns the saved collage's Uri, or null if no source art could be
+     * found anywhere inside, or there's no root folder to save into.
+     */
+    suspend fun generateCollageThumbnail(rootUri: Uri, folderUri: Uri): Uri? = withContext(Dispatchers.IO) {
+        val root = DocumentFile.fromTreeUri(context, rootUri) ?: return@withContext null
+        val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext null
+
+        val sourceImages = mutableListOf<ByteArray>()
+        folder.listFiles()
+            .filter { it.isDirectory }
+            .sortedBy { it.name?.lowercase() ?: "" }
+            .forEach { subAlbum ->
+                if (sourceImages.size >= 4) return@forEach
+                firstEmbeddedArt(subAlbum)?.let { sourceImages.add(it) }
+            }
+        if (sourceImages.isEmpty()) return@withContext null
+
+        val collage = composeCollage(sourceImages) ?: return@withContext null
+        val metadataFolder = root.findFile(METADATA_FOLDER_NAME)?.takeIf { it.isDirectory }
+            ?: root.createDirectory(METADATA_FOLDER_NAME)
+            ?: return@withContext null
+
+        val name = collageFileName(folderUri)
+        metadataFolder.findFile(name)?.delete()
+        val file = metadataFolder.createFile("image/jpeg", name)
+        val saved = file != null && runCatching {
+            context.contentResolver.openOutputStream(file.uri)?.use { out ->
+                collage.compress(Bitmap.CompressFormat.JPEG, 85, out)
+            } != null
+        }.getOrDefault(false)
+        collage.recycle()
+        if (saved) file?.uri else null
+    }
+
+    /**
+     * Looks for a custom cover image sitting directly inside a branching folder (e.g. an
+     * image dropped straight into an artist folder like "AC/DC", alongside its Album
+     * subfolders) - this lets a user override the auto-generated collage (see
+     * [generateCollageThumbnail]) just by adding a picture to that folder, no explicit
+     * "set cover" action needed. Only looks at the folder's own direct children, not any
+     * nested subfolders. Returns the first image found (alphabetically), or null if none.
+     */
+    suspend fun findFolderCoverImage(folderUri: Uri): Uri? = withContext(Dispatchers.IO) {
+        val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext null
+        if (!folder.isDirectory) return@withContext null
+        folder.listFiles()
+            .filter { it.isFile && isImageFile(it) }
+            .minByOrNull { it.name?.lowercase() ?: "" }
+            ?.uri
+    }
+
+    /** Depth-first search for the first track with embedded art anywhere inside [folder]. */
+    private fun firstEmbeddedArt(folder: DocumentFile, depth: Int = 0): ByteArray? {
+        if (depth > 6) return null // guard against pathological nesting
+        val children = folder.listFiles()
+        children.filter { it.isFile && isAudioFile(it) }
+            .sortedBy { it.name?.lowercase() ?: "" }
+            .forEach { audio ->
+                val bytes = LocalMetadataReader(context).readEmbeddedArt(audio.uri)
+                if (bytes != null) return bytes
+            }
+        children.filter { it.isDirectory }
+            .sortedBy { it.name?.lowercase() ?: "" }
+            .forEach { sub ->
+                firstEmbeddedArt(sub, depth + 1)?.let { return it }
+            }
+        return null
+    }
+
+    /** Composites 1-4 source images into a single square bitmap - a plain center-cropped image for one, a 2x2 tiled grid (repeating images to fill gaps) for more. */
+    private fun composeCollage(images: List<ByteArray>): Bitmap? {
+        if (images.size == 1) return decodeCenterCropped(images[0], COLLAGE_SIZE_PX, COLLAGE_SIZE_PX)
+
+        val cell = COLLAGE_SIZE_PX / 2
+        val output = Bitmap.createBitmap(COLLAGE_SIZE_PX, COLLAGE_SIZE_PX, Bitmap.Config.ARGB_8888)
+        val canvas = Canvas(output)
+        for (i in 0 until 4) {
+            val bytes = images[i % images.size]
+            val cellBitmap = decodeCenterCropped(bytes, cell, cell) ?: continue
+            canvas.drawBitmap(cellBitmap, ((i % 2) * cell).toFloat(), ((i / 2) * cell).toFloat(), null)
+            cellBitmap.recycle()
+        }
+        return output
+    }
+
+    /** Decodes [bytes] downsampled, then center-crops/scales to an exact [targetPx] x [targetPx] square. */
+    private fun decodeCenterCropped(bytes: ByteArray, targetW: Int, targetH: Int): Bitmap? {
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+
+        var sampleSize = 1
+        while (bounds.outWidth / (sampleSize * 2) >= targetW && bounds.outHeight / (sampleSize * 2) >= targetH) {
+            sampleSize *= 2
+        }
+        val options = BitmapFactory.Options().apply { inSampleSize = sampleSize }
+        val decoded = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options) ?: return null
+
+        val srcSize = minOf(decoded.width, decoded.height)
+        val x = (decoded.width - srcSize) / 2
+        val y = (decoded.height - srcSize) / 2
+        val cropped = if (srcSize == decoded.width && srcSize == decoded.height) decoded
+            else Bitmap.createBitmap(decoded, x, y, srcSize, srcSize)
+        val scaled = if (cropped.width == targetW && cropped.height == targetH) cropped
+            else Bitmap.createScaledBitmap(cropped, targetW, targetH, true)
+
+        if (cropped !== decoded) decoded.recycle()
+        if (scaled !== cropped) cropped.recycle()
+        return scaled
+    }
+
+    /** Stable, collision-free filename for a folder's collage - independent of same-named folders under different parents. */
+    private fun collageFileName(folderUri: Uri): String {
+        val digest = java.security.MessageDigest.getInstance("MD5")
+            .digest(folderUri.toString().toByteArray())
+            .joinToString("") { "%02x".format(it) }
+        return "collage_$digest.jpg"
+    }
 }
+
+private const val COLLAGE_SIZE_PX = 480
 
 // Must match BackgroundImageRepository's own folder name - kept as a local constant here
 // rather than a cross-file reference, since it's only needed for this one skip check.

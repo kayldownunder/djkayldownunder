@@ -6,6 +6,8 @@ import android.net.Uri
 import android.util.Log
 import androidx.documentfile.provider.DocumentFile
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
@@ -52,6 +54,13 @@ class MetadataStore private constructor(private val context: Context) {
     // from/writing to the app-private fallback file.
     @Volatile private var externalFile: DocumentFile? = null
 
+    // Guards attachRoot() end-to-end (find-or-migrate-or-create the folder, then read/
+    // merge/write the file) against running concurrently with itself - without this, two
+    // overlapping calls (e.g. the ViewModel recreated mid-attach) could each see the old
+    // "metadata" folder before either had renamed it, both migrate it, and the second
+    // rename would collide into a stray "MetaData (1)" duplicate.
+    private val attachMutex = Mutex()
+
     init {
         if (internalFallbackFile.exists()) {
             mergeFrom(runCatching { internalFallbackFile.readText() }.getOrNull())
@@ -91,7 +100,11 @@ class MetadataStore private constructor(private val context: Context) {
      * user picks a new folder. Pass null when no folder is chosen (falls back to
      * app-private storage).
      */
-    suspend fun attachRoot(rootUri: Uri?) = withContext(Dispatchers.IO) {
+    suspend fun attachRoot(rootUri: Uri?): Unit = attachMutex.withLock {
+        attachRootLocked(rootUri)
+    }
+
+    private suspend fun attachRootLocked(rootUri: Uri?) = withContext(Dispatchers.IO) {
         if (rootUri == null) {
             externalFile = null
             return@withContext
@@ -133,9 +146,17 @@ class MetadataStore private constructor(private val context: Context) {
      * "metadata". If that still exists and the current "MetaData" folder doesn't yet,
      * rename it in place rather than starting a fresh empty folder and silently losing
      * every track's already-cached metadata.
+     *
+     * Renames through a distinctly-different intermediate name first rather than going
+     * straight "metadata" -> "MetaData" - some SAF providers' rename/create uniqueness
+     * check is case-insensitive even though findFile() is case-sensitive, so a case-only
+     * rename can collide with itself and silently produce a "MetaData (1)" duplicate
+     * instead of an in-place rename. Renaming via a name that's unambiguous either way
+     * avoids that.
      */
     private fun migrateOldFolderName(root: DocumentFile): DocumentFile? {
         val old = root.findFile(OLD_METADATA_FOLDER_NAME)?.takeIf { it.isDirectory } ?: return null
+        if (!old.renameTo("${OLD_METADATA_FOLDER_NAME}_migrating")) return null
         return if (old.renameTo(METADATA_FOLDER_NAME)) old else null
     }
 

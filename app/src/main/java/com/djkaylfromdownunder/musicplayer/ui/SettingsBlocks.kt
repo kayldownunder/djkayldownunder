@@ -1,6 +1,6 @@
 package com.djkaylfromdownunder.musicplayer.ui
 
-/** One reorderable shortcut block on the Settings screen - see RearrangeSettingsScreen. */
+/** One reorderable shortcut block on the Settings screen - long-press and drag it in place to reorder. */
 data class SettingsBlockDef(val id: String, val label: String)
 
 /** Every block the Settings screen can show, in its original default order. */
@@ -10,8 +10,7 @@ val ALL_SETTINGS_BLOCKS: List<SettingsBlockDef> = listOf(
     SettingsBlockDef("consolidate_artwork", "Consolidate Album Art"),
     SettingsBlockDef("library_background", "Library Background"),
     SettingsBlockDef("settings_background", "Settings Screen Background"),
-    SettingsBlockDef("customize_dock", "Customise Bottom Dock"),
-    SettingsBlockDef("rearrange_settings", "Rearrange Settings Layout"),
+    SettingsBlockDef("dock_visibility", "Show/Hide Dock Icons"),
     SettingsBlockDef("skip_review", "Review Skipped Songs")
 )
 

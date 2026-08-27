@@ -67,8 +67,15 @@ fun SearchScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
+        // statusBarsPadding alone would still leave the search bar sitting right against
+        // the status icons; the extra top padding (roughly the bar's own height) pushes it
+        // down clear of them instead of just touching their bottom edge.
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(horizontal = 8.dp, vertical = 8.dp)
+                .padding(top = 56.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack) {

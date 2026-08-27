@@ -103,6 +103,27 @@ class MusicLibraryViewModel(application: Application) : AndroidViewModel(applica
         return repository.buildAggregatePlaylist(folderUri)
     }
 
+    /** Existing collage thumbnail for a branching folder, if one's already been generated. */
+    suspend fun findCollageThumbnail(folderUri: Uri): Uri? {
+        val root = _rootUri.value ?: return null
+        return repository.findCollageThumbnail(root, folderUri)
+    }
+
+    /**
+     * A custom cover image the user dropped directly inside a branching folder, if any -
+     * see MusicFolderRepository.findFolderCoverImage. Takes priority over the
+     * auto-generated collage when present.
+     */
+    suspend fun findFolderCoverImage(folderUri: Uri): Uri? {
+        return repository.findFolderCoverImage(folderUri)
+    }
+
+    /** Builds and saves a collage thumbnail for a branching folder - see MusicFolderRepository.generateCollageThumbnail. */
+    suspend fun generateCollageThumbnail(folderUri: Uri): Uri? {
+        val root = _rootUri.value ?: return null
+        return repository.generateCollageThumbnail(root, folderUri)
+    }
+
     /**
      * Permanently deletes a folder (and everything inside it) from device storage, then
      * re-scans the library so Search/Play Lists/Favorites/Skip Review all drop the

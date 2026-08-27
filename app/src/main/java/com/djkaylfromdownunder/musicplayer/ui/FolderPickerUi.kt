@@ -14,7 +14,8 @@ import androidx.compose.ui.Modifier
 fun ChooseMusicFolderButton(
     viewModel: MusicLibraryViewModel,
     modifier: Modifier = Modifier,
-    label: String = "Choose Music Folder"
+    label: String = "Choose Music Folder",
+    enabled: Boolean = true
 ) {
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -24,7 +25,7 @@ fun ChooseMusicFolderButton(
         }
     }
 
-    OutlinedButton(onClick = { launcher.launch(null) }, modifier = modifier) {
+    OutlinedButton(onClick = { launcher.launch(null) }, enabled = enabled, modifier = modifier) {
         Text(label)
     }
 }
