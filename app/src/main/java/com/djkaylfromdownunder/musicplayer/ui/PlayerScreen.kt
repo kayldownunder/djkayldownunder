@@ -193,7 +193,9 @@ fun PlayerScreen(
         if (folderUri != null && trackUri != null) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                horizontalArrangement = Arrangement.Center,
+                // SpaceBetween pushes Skip to the far left and Delete to the far right by
+                // the same distance, with Heart landing evenly between them.
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
@@ -206,7 +208,6 @@ fun PlayerScreen(
                 ) {
                     Text("Skip")
                 }
-                Spacer(modifier = Modifier.width(12.dp))
                 IconButton(
                     onClick = { isFavorite = customPlaylistViewModel.toggleFavoriteTrack(trackUri) },
                     modifier = Modifier.size(40.dp)
@@ -217,7 +218,6 @@ fun PlayerScreen(
                         tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(modifier = Modifier.width(24.dp))
                 IconButton(onClick = { showDeleteDialog = true }, modifier = Modifier.size(40.dp)) {
                     Icon(
                         Icons.Default.Delete,
