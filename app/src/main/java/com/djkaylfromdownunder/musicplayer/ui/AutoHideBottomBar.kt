@@ -34,11 +34,11 @@ private const val AUTO_HIDE_DELAY_MS = 4_000L
 private val REVEAL_DRAG_THRESHOLD = 20.dp
 
 /**
- * Wraps the bottom mini-player/dock so it auto-hides after [AUTO_HIDE_DELAY_MS] of being
- * left alone, sliding down out of view. A small drag handle takes its place - dragging it
- * upward brings the bar back and restarts the same countdown. Used only on the Library
- * screen (see AppNavHost), so the full album grid gets more room once the bar is out of
- * the way.
+ * Wraps a bottom bar so it auto-hides after [AUTO_HIDE_DELAY_MS] of being left alone,
+ * sliding down out of view. A small drag handle takes its place - dragging it upward
+ * brings the bar back and restarts the same countdown. Used for the mini-player/dock on
+ * Library and Play Lists (see AppNavHost) and for the compact playback bar on the Player
+ * screen, so the content above gets more room once the bar is out of the way.
  */
 @Composable
 fun AutoHideBottomBar(content: @Composable () -> Unit) {

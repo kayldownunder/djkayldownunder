@@ -410,10 +410,12 @@ fun PlayerScreen(
             }
         }
 
-        // Slim, always-visible playback bar pinned to the very bottom of the screen -
-        // progress line plus previous/play-pause/next, kept minimal so the artwork and
-        // track list above get as much room as possible.
-        CompactPlaybackBar(state = state, viewModel = viewModel)
+        // Slim playback bar pinned to the very bottom of the screen - progress line plus
+        // previous/play-pause/next. Wrapped in AutoHideBottomBar so it slides away after
+        // 4s idle just like the mini-player/dock on Library and Play Lists, leaving a
+        // drag-up handle so the artwork and track list above get the full screen once the
+        // user isn't actively using transport controls.
+        AutoHideBottomBar(content = { CompactPlaybackBar(state = state, viewModel = viewModel) })
     }
 }
 
