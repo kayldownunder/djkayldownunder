@@ -625,10 +625,13 @@ private fun CompactPlaybackBar(state: PlayerUiState, viewModel: PlayerViewModel)
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.background.copy(alpha = 0.6f))
-            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .padding(horizontal = 16.dp)
+            .padding(top = 4.dp, bottom = 16.dp)
     ) {
         PlaybackSlider(state = state, viewModel = viewModel)
-        Spacer(modifier = Modifier.height(8.dp))
+        // Matches the 16dp bottom padding above, so the controls row sits with equal
+        // breathing room between the slider above it and the screen edge below it.
+        Spacer(modifier = Modifier.height(16.dp))
         PlaybackControls(state = state, viewModel = viewModel)
     }
 }
@@ -673,7 +676,7 @@ private fun PlaybackControls(state: PlayerUiState, viewModel: PlayerViewModel) {
         }
         FilledIconButton(
             onClick = { viewModel.togglePlayPause() },
-            modifier = Modifier.offset(y = (-16).dp).size(44.dp),
+            modifier = Modifier.size(44.dp),
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
