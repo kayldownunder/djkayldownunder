@@ -33,6 +33,7 @@ fun SettingsScreen(
     fontPreferencesViewModel: FontPreferencesViewModel,
     settingsLayoutViewModel: SettingsLayoutViewModel,
     dockPreferencesViewModel: DockPreferencesViewModel,
+    buttonColorViewModel: ButtonColorViewModel,
     onNavigateToSkipReview: () -> Unit
 ) {
     val rootUri by libraryViewModel.rootUri.collectAsState()
@@ -122,6 +123,7 @@ fun SettingsScreen(
                     block = block,
                     libraryViewModel = libraryViewModel,
                     themeViewModel = themeViewModel,
+                    buttonColorViewModel = buttonColorViewModel,
                     rootUri = rootUri,
                     metadataRunning = metadataProgress.isRunning,
                     isScanningLibrary = isScanningLibrary,
@@ -194,6 +196,7 @@ private fun SettingsBlockButton(
     block: SettingsBlockDef,
     libraryViewModel: MusicLibraryViewModel,
     themeViewModel: ThemeViewModel,
+    buttonColorViewModel: ButtonColorViewModel,
     rootUri: android.net.Uri?,
     metadataRunning: Boolean,
     isScanningLibrary: Boolean,
@@ -211,7 +214,8 @@ private fun SettingsBlockButton(
             viewModel = libraryViewModel,
             modifier = fillWidth,
             label = block.label,
-            enabled = dragEnabled
+            enabled = dragEnabled,
+            buttonColorViewModel = buttonColorViewModel
         )
         "metadata" -> Column(modifier = fillWidth) {
             if (isScanningLibrary) {
@@ -222,18 +226,20 @@ private fun SettingsBlockButton(
                 )
                 Spacer(modifier = Modifier.height(4.dp))
             }
-            OutlinedButton(
+            Button(
                 onClick = onFetchAllMetadata,
                 enabled = dragEnabled && rootUri != null && !metadataRunning && !isScanningLibrary,
+                colors = shortcutButtonColors(buttonColorViewModel),
                 modifier = fillWidth
             ) {
                 Text(block.label)
             }
         }
         "consolidate_artwork" -> Column(modifier = fillWidth) {
-            OutlinedButton(
+            Button(
                 onClick = onConsolidateArtwork,
                 enabled = dragEnabled && rootUri != null && !isConsolidatingArtwork,
+                colors = shortcutButtonColors(buttonColorViewModel),
                 modifier = fillWidth
             ) {
                 Text(if (isConsolidatingArtwork) "Moving images…" else block.label)
@@ -251,6 +257,7 @@ private fun SettingsBlockButton(
             target = BackgroundTarget.LIBRARY,
             label = block.label,
             themeViewModel = themeViewModel,
+            buttonColorViewModel = buttonColorViewModel,
             modifier = fillWidth,
             enabled = dragEnabled
         )
@@ -258,14 +265,31 @@ private fun SettingsBlockButton(
             target = BackgroundTarget.SETTINGS,
             label = block.label,
             themeViewModel = themeViewModel,
+            buttonColorViewModel = buttonColorViewModel,
             modifier = fillWidth,
             enabled = dragEnabled
         )
-        "dock_visibility" -> OutlinedButton(onClick = onShowDockVisibility, enabled = dragEnabled, modifier = fillWidth) {
+        "dock_visibility" -> Button(
+            onClick = onShowDockVisibility,
+            enabled = dragEnabled,
+            colors = shortcutButtonColors(buttonColorViewModel),
+            modifier = fillWidth
+        ) {
             Text(block.label)
         }
-        "skip_review" -> OutlinedButton(onClick = onNavigateToSkipReview, enabled = dragEnabled, modifier = fillWidth) {
+        "skip_review" -> Button(
+            onClick = onNavigateToSkipReview,
+            enabled = dragEnabled,
+            colors = shortcutButtonColors(buttonColorViewModel),
+            modifier = fillWidth
+        ) {
             Text(block.label)
         }
+        "shortcut_button_color" -> ShortcutButtonColorPicker(
+            buttonColorViewModel = buttonColorViewModel,
+            modifier = fillWidth,
+            label = block.label,
+            enabled = dragEnabled
+        )
     }
 }

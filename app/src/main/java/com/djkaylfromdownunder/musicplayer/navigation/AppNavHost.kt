@@ -63,6 +63,7 @@ fun AppNavHost() {
     val dockPreferencesViewModel: DockPreferencesViewModel = viewModel()
     val fontPreferencesViewModel: FontPreferencesViewModel = viewModel()
     val settingsLayoutViewModel: SettingsLayoutViewModel = viewModel()
+    val buttonColorViewModel: ButtonColorViewModel = viewModel()
 
     var showViewSheet by remember { mutableStateOf(false) }
 
@@ -119,6 +120,8 @@ fun AppNavHost() {
                         if (currentRootUri == null) {
                             NoLibraryChosenScreen(libraryViewModel = libraryViewModel)
                         } else {
+                            val libraryState by libraryViewModel.state.collectAsState()
+                            val allPlaylists = (libraryState as? LibraryState.Loaded)?.playlists.orEmpty()
                             FolderBrowserScreen(
                                 folderUri = currentRootUri,
                                 folderName = "Your Library",
@@ -132,7 +135,13 @@ fun AppNavHost() {
                                 onPlayLeaf = { playlist ->
                                     playerViewModel.playPlaylist(playlist)
                                     navController.navigate(Routes.PLAYER)
-                                }
+                                },
+                                onShuffleAll = if (allPlaylists.isNotEmpty()) {
+                                    {
+                                        playerViewModel.playShuffledAllTracks(allPlaylists)
+                                        navController.navigate(Routes.PLAYER)
+                                    }
+                                } else null
                             )
                         }
                     }
@@ -179,8 +188,13 @@ fun AppNavHost() {
                         favoritesViewModel = favoritesViewModel,
                         customPlaylistViewModel = customPlaylistViewModel,
                         viewPreferencesViewModel = viewPreferencesViewModel,
+                        buttonColorViewModel = buttonColorViewModel,
                         onPlaylistClick = { playlist ->
                             playerViewModel.playPlaylist(playlist)
+                            navController.navigate(Routes.PLAYER)
+                        },
+                        onRandomSkipAllAlbums = { playlists ->
+                            playerViewModel.playShuffledAllTracks(playlists)
                             navController.navigate(Routes.PLAYER)
                         }
                     )
@@ -213,6 +227,8 @@ fun AppNavHost() {
                         metadataViewModel = metadataViewModel,
                         skipListViewModel = skipListViewModel,
                         libraryViewModel = libraryViewModel,
+                        customPlaylistViewModel = customPlaylistViewModel,
+                        buttonColorViewModel = buttonColorViewModel,
                         onCollapse = { navController.popBackStack() },
                         onPlayRecommendation = { playlist ->
                             playerViewModel.playPlaylist(playlist, forceRestart = true)
@@ -228,6 +244,7 @@ fun AppNavHost() {
                             fontPreferencesViewModel = fontPreferencesViewModel,
                             settingsLayoutViewModel = settingsLayoutViewModel,
                             dockPreferencesViewModel = dockPreferencesViewModel,
+                            buttonColorViewModel = buttonColorViewModel,
                             onNavigateToSkipReview = { navController.navigate(Routes.SKIP_REVIEW) }
                         )
                     }

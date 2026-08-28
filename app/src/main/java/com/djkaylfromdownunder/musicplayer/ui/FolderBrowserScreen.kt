@@ -16,6 +16,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Folder
+import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -40,7 +41,8 @@ fun FolderBrowserScreen(
     favoritesViewModel: FavoritesViewModel,
     viewPreferencesViewModel: ViewPreferencesViewModel,
     onNavigateToSubfolder: (Uri, String) -> Unit,
-    onPlayLeaf: (Playlist) -> Unit
+    onPlayLeaf: (Playlist) -> Unit,
+    onShuffleAll: (() -> Unit)? = null
 ) {
     var items by remember(folderUri) { mutableStateOf<List<FolderBrowseItem>?>(null) }
     // Bumped after a folder delete completes, to force listFolderLevel to be re-fetched
@@ -65,7 +67,7 @@ fun FolderBrowserScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
             Text(
                 folderName,
                 style = MaterialTheme.typography.headlineLarge,
@@ -73,6 +75,14 @@ fun FolderBrowserScreen(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
+            if (onShuffleAll != null) {
+                IconButton(
+                    onClick = onShuffleAll,
+                    modifier = Modifier.align(Alignment.CenterEnd)
+                ) {
+                    Icon(Icons.Default.Shuffle, contentDescription = "Shuffle all songs")
+                }
+            }
         }
 
         val current = items
@@ -288,34 +298,38 @@ private fun SubFolderGridCard(
                     modifier = Modifier.size(if (compact) 14.dp else 18.dp)
                 )
             }
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(6.dp)
-                    .size(badgeSize)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
-                    .clickable(enabled = canSync) {
-                        syncSubFolder(
-                            scope, libraryViewModel, metadataViewModel, item.uri,
-                            isResolving = { isResolving = it },
-                            onCollageGenerated = { collageUri = it }
+            // Folders that contain only nested subfolders (no songs directly inside) have
+            // nothing of their own to fetch metadata for, so this shortcut is hidden there.
+            if (item.hasDirectTracks) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(6.dp)
+                        .size(badgeSize)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
+                        .clickable(enabled = canSync) {
+                            syncSubFolder(
+                                scope, libraryViewModel, metadataViewModel, item.uri,
+                                isResolving = { isResolving = it },
+                                onCollageGenerated = { collageUri = it }
+                            )
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (isFetching) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(if (compact) 12.dp else 16.dp),
+                            strokeWidth = 2.dp,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                    },
-                contentAlignment = Alignment.Center
-            ) {
-                if (isFetching) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(if (compact) 12.dp else 16.dp),
-                        strokeWidth = 2.dp,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                } else {
-                    Icon(
-                        imageVector = Icons.Default.Download,
-                        contentDescription = "Fetch metadata for ${item.name}",
-                        modifier = Modifier.size(if (compact) 14.dp else 18.dp)
-                    )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = "Fetch metadata for ${item.name}",
+                            modifier = Modifier.size(if (compact) 14.dp else 18.dp)
+                        )
+                    }
                 }
             }
             Box(
@@ -443,22 +457,26 @@ private fun SubFolderListRow(
                 tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        if (isFetching) {
-            Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+        // Folders that contain only nested subfolders (no songs directly inside) have
+        // nothing of their own to fetch metadata for, so this shortcut is hidden there.
+        if (item.hasDirectTracks) {
+            if (isFetching) {
+                Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                }
+            } else {
+                IconButton(onClick = {
+                    syncSubFolder(
+                        scope, libraryViewModel, metadataViewModel, item.uri,
+                        isResolving = { isResolving = it },
+                        onCollageGenerated = { collageUri = it }
+                    )
+                }) {
+                    Icon(imageVector = Icons.Default.Download, contentDescription = "Fetch metadata for ${item.name}")
+                }
             }
-        } else {
-            IconButton(onClick = {
-                syncSubFolder(
-                    scope, libraryViewModel, metadataViewModel, item.uri,
-                    isResolving = { isResolving = it },
-                    onCollageGenerated = { collageUri = it }
-                )
-            }) {
-                Icon(imageVector = Icons.Default.Download, contentDescription = "Fetch metadata for ${item.name}")
-            }
+            Spacer(modifier = Modifier.width(8.dp))
         }
-        Spacer(modifier = Modifier.width(8.dp))
         if (isDeleting) {
             Box(modifier = Modifier.size(48.dp), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)

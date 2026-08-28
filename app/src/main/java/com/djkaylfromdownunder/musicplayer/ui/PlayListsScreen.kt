@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.djkaylfromdownunder.musicplayer.data.Playlist
 import com.djkaylfromdownunder.musicplayer.data.PlaylistViewMode
@@ -22,7 +23,9 @@ fun PlayListsScreen(
     favoritesViewModel: FavoritesViewModel,
     customPlaylistViewModel: CustomPlaylistViewModel,
     viewPreferencesViewModel: ViewPreferencesViewModel,
-    onPlaylistClick: (Playlist) -> Unit
+    buttonColorViewModel: ButtonColorViewModel,
+    onPlaylistClick: (Playlist) -> Unit,
+    onRandomSkipAllAlbums: (List<Playlist>) -> Unit
 ) {
     val libraryState by libraryViewModel.state.collectAsState()
     val viewMode by viewPreferencesViewModel.viewMode.collectAsState()
@@ -36,13 +39,28 @@ fun PlayListsScreen(
     val allPlaylists = customPlaylists + folderPlaylists
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Column(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+        // A Row with a weighted title (rather than a Box with independently-centered
+        // children) so a wide title never overlaps the shortcut on the right - see the
+        // same fix on PlayerScreen's header. statusBarsPadding() keeps the shortcut clear
+        // of the status bar icons, same reasoning as Settings' own top-right icon button.
+        Row(
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 "Play Lists",
                 style = MaterialTheme.typography.headlineLarge,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
+            if (folderPlaylists.isNotEmpty()) {
+                RandomSkipAllShortcut(
+                    onClick = { onRandomSkipAllAlbums(folderPlaylists) },
+                    buttonColorViewModel = buttonColorViewModel
+                )
+            }
         }
 
         if (allPlaylists.isEmpty()) {

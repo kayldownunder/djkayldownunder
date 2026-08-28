@@ -131,12 +131,18 @@ fun BackgroundShortcutButton(
     target: BackgroundTarget,
     label: String,
     themeViewModel: ThemeViewModel,
+    buttonColorViewModel: ButtonColorViewModel,
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
     var showPicker by remember { mutableStateOf(false) }
 
-    OutlinedButton(onClick = { showPicker = true }, enabled = enabled, modifier = modifier) {
+    Button(
+        onClick = { showPicker = true },
+        enabled = enabled,
+        colors = shortcutButtonColors(buttonColorViewModel),
+        modifier = modifier
+    ) {
         Text(label)
     }
 

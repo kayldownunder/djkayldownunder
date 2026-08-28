@@ -11,7 +11,8 @@ val ALL_SETTINGS_BLOCKS: List<SettingsBlockDef> = listOf(
     SettingsBlockDef("library_background", "Library Background"),
     SettingsBlockDef("settings_background", "Settings Screen Background"),
     SettingsBlockDef("dock_visibility", "Show/Hide Dock Icons"),
-    SettingsBlockDef("skip_review", "Review Skipped Songs")
+    SettingsBlockDef("skip_review", "Review Skipped Songs"),
+    SettingsBlockDef("shortcut_button_color", "Shortcut Button Color Selection")
 )
 
 val DEFAULT_SETTINGS_ORDER: List<String> = ALL_SETTINGS_BLOCKS.map { it.id }

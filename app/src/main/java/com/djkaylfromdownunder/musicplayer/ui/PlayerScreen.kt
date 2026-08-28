@@ -19,17 +19,15 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
-import androidx.compose.ui.layout.layout
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
 import com.djkaylfromdownunder.musicplayer.data.Playlist
 import com.djkaylfromdownunder.musicplayer.data.Track
@@ -47,10 +45,28 @@ fun PlayerScreen(
     metadataViewModel: MetadataViewModel,
     skipListViewModel: SkipListViewModel,
     libraryViewModel: MusicLibraryViewModel,
+    customPlaylistViewModel: CustomPlaylistViewModel,
+    buttonColorViewModel: ButtonColorViewModel,
     onCollapse: () -> Unit = {},
     onPlayRecommendation: (Playlist) -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
+
+    // Skip-this-song and favorite state for the current track, hoisted here so both the
+    // top icon row (Skip/Heart/Delete) and the skip-checkbox row under the album artwork
+    // can share them.
+    val folderUri = state.currentPlaylistFolderUri
+    val trackUri = state.currentTrack?.uri?.toString()
+    var skipRefreshTick by remember { mutableIntStateOf(0) }
+    var isSkipMarked by remember(folderUri, trackUri) {
+        mutableStateOf(
+            if (folderUri != null && trackUri != null) skipListViewModel.isSkipped(folderUri, trackUri) else false
+        )
+    }
+    var isFavorite by remember(trackUri) {
+        mutableStateOf(trackUri?.let { customPlaylistViewModel.isFavoriteTrack(it) } ?: false)
+    }
+    var showDeleteDialog by remember { mutableStateOf(false) }
 
     // The shared library scan (libraryState) is normally already warm by the time the
     // user opens a track, but on a very large library it can still be mid-scan (or not
@@ -139,67 +155,68 @@ fun PlayerScreen(
                 )
             )
     ) {
-        Box(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 4.dp, start = 24.dp, end = 24.dp)
+        // A Row with a weighted title (rather than a Box with independently-centered
+        // children) so the title never overlaps the "Random skip all albums" shortcut -
+        // which a Box-based header would do, since "Now Playing" at headlineLarge is
+        // nearly as wide as the screen on its own. The shortcut sits at the far right -
+        // the screen's pre-existing "shuffle current album" toggle used to sit there too
+        // but was removed from here since its icon was easily confused with this new
+        // shortcut's own shuffle icon.
+        Row(
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 4.dp, start = 24.dp, end = 24.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(
-                onClick = onCollapse,
-                modifier = Modifier.align(Alignment.CenterStart)
-            ) {
+            IconButton(onClick = onCollapse) {
                 Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse")
             }
             Text(
-                "NOW PLAYING",
+                "Now Playing",
                 style = MaterialTheme.typography.headlineLarge,
-                modifier = Modifier.align(Alignment.Center)
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f)
             )
+            if (allPlaylists.isNotEmpty()) {
+                RandomSkipAllShortcut(
+                    onClick = { viewModel.playShuffledAllTracks(allPlaylists) },
+                    buttonColorViewModel = buttonColorViewModel
+                )
+            }
         }
 
-        // Skip-this-song controls: tick to always skip this track in this playlist from
-        // now on, or tap Skip to just jump past it right now without marking it.
-        val folderUri = state.currentPlaylistFolderUri
-        val trackUri = state.currentTrack?.uri?.toString()
-        var skipRefreshTick by remember { mutableIntStateOf(0) }
-
+        // Track actions: Skip (now where the volume control used to sit), Heart to
+        // favorite the track, and - at the far right, matching the Skip button's size -
+        // Delete. The "skip this song next time" checkbox sits separately, directly
+        // under the album artwork below.
         if (folderUri != null && trackUri != null) {
-            var isSkipMarked by remember(trackUri) {
-                mutableStateOf(skipListViewModel.isSkipped(folderUri, trackUri))
-            }
-            var showDeleteDialog by remember { mutableStateOf(false) }
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Left to right: volume, then the orange Skip button, then - grouped
-                // together at the right edge for functional pairing - the "skip next
-                // time" checkbox/label sitting right beside the trash icon.
-                CompactVerticalVolumeControl(state = state, viewModel = viewModel)
-                Spacer(modifier = Modifier.width(12.dp))
                 Button(
                     onClick = { viewModel.skipNext() },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
+                    ),
+                    modifier = Modifier.height(40.dp)
                 ) {
                     Text("Skip")
                 }
+                Spacer(modifier = Modifier.width(12.dp))
+                IconButton(
+                    onClick = { isFavorite = customPlaylistViewModel.toggleFavoriteTrack(trackUri) },
+                    modifier = Modifier.size(40.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove from Favorites" else "Add to Favorites",
+                        tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
                 Spacer(modifier = Modifier.weight(1f))
-                Checkbox(
-                    checked = isSkipMarked,
-                    onCheckedChange = { checked ->
-                        isSkipMarked = checked
-                        skipListViewModel.setSkipped(folderUri, trackUri, checked)
-                        skipRefreshTick++
-                    }
-                )
-                Text(
-                    "Skip this song next time",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                IconButton(onClick = { showDeleteDialog = true }) {
+                IconButton(onClick = { showDeleteDialog = true }, modifier = Modifier.size(40.dp)) {
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = "Delete",
@@ -255,10 +272,32 @@ fun PlayerScreen(
                 }
             }
 
+            // "Skip this song next time": tick to always skip this track in this
+            // playlist from now on. Sits directly under the album artwork.
+            if (folderUri != null && trackUri != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Checkbox(
+                        checked = isSkipMarked,
+                        onCheckedChange = { checked ->
+                            isSkipMarked = checked
+                            skipListViewModel.setSkipped(folderUri, trackUri, checked)
+                            skipRefreshTick++
+                        }
+                    )
+                    Text(
+                        "Skip this song next time",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
             // Title/album - stays with the artwork above the track list. The actual
             // transport controls and progress bar live in the slim bar pinned to the
-            // bottom of the whole screen (see CompactPlaybackBar below); volume now sits
-            // beside the skip-this-song row above (see CompactVerticalVolumeControl).
+            // bottom of the whole screen (see CompactPlaybackBar below).
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -589,6 +628,7 @@ private fun CompactPlaybackBar(state: PlayerUiState, viewModel: PlayerViewModel)
             .padding(horizontal = 16.dp, vertical = 4.dp)
     ) {
         PlaybackSlider(state = state, viewModel = viewModel)
+        Spacer(modifier = Modifier.height(8.dp))
         PlaybackControls(state = state, viewModel = viewModel)
     }
 }
@@ -633,7 +673,7 @@ private fun PlaybackControls(state: PlayerUiState, viewModel: PlayerViewModel) {
         }
         FilledIconButton(
             onClick = { viewModel.togglePlayPause() },
-            modifier = Modifier.size(44.dp),
+            modifier = Modifier.offset(y = (-16).dp).size(44.dp),
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary
@@ -651,64 +691,3 @@ private fun PlaybackControls(state: PlayerUiState, viewModel: PlayerViewModel) {
     }
 }
 
-/**
- * Small vertical volume slider with +/- step buttons above and below it - sits to the
- * left of the skip-this-song row, kept deliberately narrow so it doesn't crowd that row's
- * checkbox/text/Skip button/delete icon.
- */
-@Composable
-private fun CompactVerticalVolumeControl(state: PlayerUiState, viewModel: PlayerViewModel) {
-    fun step(delta: Float) {
-        viewModel.setVolume((state.volume + delta).coerceIn(0f, 1f))
-    }
-
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(onClick = { step(0.1f) }, modifier = Modifier.size(32.dp)) {
-            Icon(
-                Icons.Default.Add,
-                contentDescription = "Increase volume",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-        Slider(
-            value = state.volume,
-            onValueChange = { viewModel.setVolume(it) },
-            valueRange = 0f..1f,
-            colors = SliderDefaults.colors(
-                thumbColor = MaterialTheme.colorScheme.onSurfaceVariant,
-                activeTrackColor = MaterialTheme.colorScheme.onSurfaceVariant
-            ),
-            // Built by rotating a standard Slider 270° and swapping its reported
-            // width/height, since Material3 has no vertical Slider variant.
-            modifier = Modifier
-                .height(28.dp)
-                .width(16.dp)
-                .graphicsLayer {
-                    rotationZ = 270f
-                    transformOrigin = TransformOrigin(0f, 0f)
-                }
-                .layout { measurable, constraints ->
-                    val placeable = measurable.measure(
-                        Constraints(
-                            minWidth = constraints.minHeight,
-                            maxWidth = constraints.maxHeight,
-                            minHeight = constraints.minWidth,
-                            maxHeight = constraints.maxWidth
-                        )
-                    )
-                    layout(placeable.height, placeable.width) {
-                        placeable.place(-placeable.width, 0)
-                    }
-                }
-        )
-        IconButton(onClick = { step(-0.1f) }, modifier = Modifier.size(32.dp)) {
-            Icon(
-                Icons.Default.Remove,
-                contentDescription = "Decrease volume",
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-        }
-    }
-}

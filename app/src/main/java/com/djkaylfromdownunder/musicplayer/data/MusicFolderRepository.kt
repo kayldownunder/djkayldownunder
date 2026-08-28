@@ -11,7 +11,14 @@ import kotlinx.coroutines.withContext
 
 /** One entry when browsing a folder level: either something to navigate into, or a playable playlist. */
 sealed class FolderBrowseItem {
-    data class SubFolder(val uri: Uri, val name: String) : FolderBrowseItem()
+    /**
+     * [hasDirectTracks] is true only when this folder has audio files directly inside it,
+     * alongside its subfolders (e.g. an artist folder with a few loose singles next to its
+     * Album subfolders) - false for a folder that contains only nested subfolders and no
+     * songs of its own, which is what the Library screen uses to hide the "Update Metadata"
+     * icon on folders that have nothing of their own to fetch a shortcut for.
+     */
+    data class SubFolder(val uri: Uri, val name: String, val hasDirectTracks: Boolean = false) : FolderBrowseItem()
     data class LeafPlaylist(val playlist: Playlist) : FolderBrowseItem()
 
     val sortName: String get() = when (this) {
@@ -113,7 +120,8 @@ class MusicFolderRepository(private val context: Context) {
                 val subChildren = sub.listFiles()
                 val hasSubfolders = subChildren.any { it.isDirectory }
                 if (hasSubfolders) {
-                    FolderBrowseItem.SubFolder(sub.uri, sub.name ?: "Untitled")
+                    val hasDirectTracks = subChildren.any { it.isFile && isAudioFile(it) }
+                    FolderBrowseItem.SubFolder(sub.uri, sub.name ?: "Untitled", hasDirectTracks)
                 } else {
                     val audioFiles = subChildren.filter { it.isFile && isAudioFile(it) }
                     if (audioFiles.isEmpty()) null // empty folder, nothing to show
