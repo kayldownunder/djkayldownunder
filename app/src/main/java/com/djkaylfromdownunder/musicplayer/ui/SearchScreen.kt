@@ -18,6 +18,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.djkaylfromdownunder.musicplayer.data.Playlist
 import com.djkaylfromdownunder.musicplayer.data.Track
@@ -102,7 +103,7 @@ fun SearchScreen(
 
         when {
             playlists.isEmpty() -> EmptyMessage("Load your music library first to search.")
-            query.isBlank() -> EmptyMessage("Start typing to search your library.")
+            query.isBlank() -> EmptyMessage("Start typing to search your library.", alignTop = true)
             results.isEmpty() -> EmptyMessage("No matches for \"$query\".")
             else -> {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
@@ -130,9 +131,12 @@ fun SearchScreen(
 }
 
 @Composable
-private fun EmptyMessage(message: String) {
-    Box(modifier = Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant)
+private fun EmptyMessage(message: String, alignTop: Boolean = false) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        contentAlignment = if (alignTop) Alignment.TopCenter else Alignment.Center
+    ) {
+        Text(message, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
     }
 }
 

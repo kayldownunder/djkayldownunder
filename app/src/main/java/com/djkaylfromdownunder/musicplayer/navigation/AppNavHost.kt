@@ -85,25 +85,35 @@ fun AppNavHost() {
     Scaffold(
             bottomBar = {
                 if (currentRoute !in hideBottomBarRoutes) {
-                    Column {
-                        MiniPlayerBar(
-                            playerViewModel = playerViewModel,
-                            metadataViewModel = metadataViewModel,
-                            onExpand = { navController.navigate(Routes.PLAYER) }
-                        )
-                        AppBottomNav(
-                            dockItems = dockItems,
-                            currentRoute = if (isFolderRoute) Routes.LIBRARY else currentRoute,
-                            onNavigate = { route ->
-                                navController.navigate(route) {
-                                    popUpTo(Routes.LIBRARY) { inclusive = false }
-                                    launchSingleTop = true
-                                }
-                            },
-                            onPushNavigate = { route -> navController.navigate(route) },
-                            onViewClick = { showViewSheet = true },
-                            onReorder = { ids -> dockPreferencesViewModel.setOrderedIds(ids) }
-                        )
+                    val bar: @Composable () -> Unit = {
+                        Column {
+                            MiniPlayerBar(
+                                playerViewModel = playerViewModel,
+                                metadataViewModel = metadataViewModel,
+                                onExpand = { navController.navigate(Routes.PLAYER) }
+                            )
+                            AppBottomNav(
+                                dockItems = dockItems,
+                                currentRoute = if (isFolderRoute) Routes.LIBRARY else currentRoute,
+                                onNavigate = { route ->
+                                    navController.navigate(route) {
+                                        popUpTo(Routes.LIBRARY) { inclusive = false }
+                                        launchSingleTop = true
+                                    }
+                                },
+                                onPushNavigate = { route -> navController.navigate(route) },
+                                onViewClick = { showViewSheet = true },
+                                onReorder = { ids -> dockPreferencesViewModel.setOrderedIds(ids) }
+                            )
+                        }
+                    }
+                    // Auto-hide-after-idle only on the Library screens (root + nested
+                    // folder browsing) and Play Lists - every other tab keeps the bar
+                    // permanently visible.
+                    if (isFolderRoute || currentRoute == Routes.LIBRARY || currentRoute == Routes.PLAYLISTS) {
+                        AutoHideBottomBar(content = bar)
+                    } else {
+                        bar()
                     }
                 }
             }
@@ -129,6 +139,7 @@ fun AppNavHost() {
                                 metadataViewModel = metadataViewModel,
                                 favoritesViewModel = favoritesViewModel,
                                 viewPreferencesViewModel = viewPreferencesViewModel,
+                                buttonColorViewModel = buttonColorViewModel,
                                 onNavigateToSubfolder = { uri, name ->
                                     navController.navigate(Routes.folderRoute(uri, name))
                                 },
@@ -171,6 +182,7 @@ fun AppNavHost() {
                             metadataViewModel = metadataViewModel,
                             favoritesViewModel = favoritesViewModel,
                             viewPreferencesViewModel = viewPreferencesViewModel,
+                            buttonColorViewModel = buttonColorViewModel,
                             onNavigateToSubfolder = { uri, name ->
                                 navController.navigate(Routes.folderRoute(uri, name))
                             },

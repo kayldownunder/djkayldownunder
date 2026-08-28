@@ -129,6 +129,10 @@ fun ShortcutButtonColorPicker(
  * track from every album into one combined queue and starts playing it. Rendered as a
  * small round colored button (see shortcutButtonColors) with its label directly underneath
  * rather than inside the button, so the label has room without widening the button itself.
+ *
+ * Also doubles as a simple two-state toggle indicator, purely visual (not tied to any
+ * persisted setting) - starts white/black, flips to the configured shortcut color on the
+ * first tap, and back to white/black on the next, while still firing [onClick] every time.
  */
 @Composable
 fun RandomSkipAllShortcut(
@@ -138,17 +142,21 @@ fun RandomSkipAllShortcut(
     enabled: Boolean = true
 ) {
     val color by buttonColorViewModel.color.collectAsState()
+    var isActive by remember { mutableStateOf(false) }
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = modifier.width(56.dp)
     ) {
         FilledIconButton(
-            onClick = onClick,
+            onClick = {
+                isActive = !isActive
+                onClick()
+            },
             enabled = enabled,
             modifier = Modifier.size(32.dp),
             colors = IconButtonDefaults.filledIconButtonColors(
-                containerColor = color,
-                contentColor = Color.White
+                containerColor = if (isActive) color else Color.White,
+                contentColor = if (isActive) Color.White else Color.Black
             )
         ) {
             Icon(Icons.Default.Shuffle, contentDescription = "Random skip all albums", modifier = Modifier.size(16.dp))

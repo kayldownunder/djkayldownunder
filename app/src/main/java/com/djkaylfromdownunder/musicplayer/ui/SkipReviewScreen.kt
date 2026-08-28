@@ -11,6 +11,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.djkaylfromdownunder.musicplayer.data.Playlist
 import com.djkaylfromdownunder.musicplayer.data.Track
@@ -51,8 +52,15 @@ fun SkipReviewScreen(
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Review Skipped Songs", style = MaterialTheme.typography.headlineSmall)
+            Text(
+                "Review Skipped Songs",
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.weight(1f)
+            )
+            // Balances the back arrow on the left so the title is centered on the screen,
+            // not just centered in the space left over after the arrow.
+            Spacer(modifier = Modifier.width(48.dp))
         }
 
         if (playlists.isEmpty()) {

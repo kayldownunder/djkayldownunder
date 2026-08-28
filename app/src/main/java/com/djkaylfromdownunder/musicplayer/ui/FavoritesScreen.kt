@@ -90,13 +90,12 @@ fun FavoritesScreen(
                 }
             }
         } else {
-            val isSmall = viewMode == PlaylistViewMode.SMALL
-            val columns = if (isSmall) 3 else 2
+            val isCompact = viewMode.isCompact
             LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
+                columns = GridCells.Fixed(viewMode.gridColumns),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (isSmall) 6.dp else 12.dp),
-                verticalArrangement = Arrangement.spacedBy(if (isSmall) 10.dp else 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (isCompact) 6.dp else 12.dp),
+                verticalArrangement = Arrangement.spacedBy(if (isCompact) 10.dp else 16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(favoritePlaylists, key = { it.folderUri.toString() }) { playlist ->
@@ -104,7 +103,7 @@ fun FavoritesScreen(
                         playlist = playlist,
                         metadataViewModel = metadataViewModel,
                         favoritesViewModel = favoritesViewModel,
-                        compact = viewMode == PlaylistViewMode.SMALL,
+                        compact = isCompact,
                         onClick = { onPlaylistClick(playlist) }
                     )
                 }

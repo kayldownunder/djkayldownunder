@@ -37,8 +37,15 @@ fun ViewModeSheet(
                 onClick = { onModeSelected(PlaylistViewMode.MEDIUM) }
             )
             ViewModeOption(
+                label = "Medium",
+                description = "3 per row",
+                icon = Icons.Default.ViewModule,
+                selected = currentMode == PlaylistViewMode.MEDIUM_GRID,
+                onClick = { onModeSelected(PlaylistViewMode.MEDIUM_GRID) }
+            )
+            ViewModeOption(
                 label = "Small",
-                description = "3 per row, dense grid - see more albums at once",
+                description = "4 per row, dense grid - see more albums at once",
                 icon = Icons.Default.ViewModule,
                 selected = currentMode == PlaylistViewMode.SMALL,
                 onClick = { onModeSelected(PlaylistViewMode.SMALL) }

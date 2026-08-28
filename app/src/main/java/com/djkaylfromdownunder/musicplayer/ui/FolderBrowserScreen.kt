@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.djkaylfromdownunder.musicplayer.data.FolderBrowseItem
 import com.djkaylfromdownunder.musicplayer.data.Playlist
@@ -40,6 +41,7 @@ fun FolderBrowserScreen(
     metadataViewModel: MetadataViewModel,
     favoritesViewModel: FavoritesViewModel,
     viewPreferencesViewModel: ViewPreferencesViewModel,
+    buttonColorViewModel: ButtonColorViewModel,
     onNavigateToSubfolder: (Uri, String) -> Unit,
     onPlayLeaf: (Playlist) -> Unit,
     onShuffleAll: (() -> Unit)? = null
@@ -67,21 +69,26 @@ fun FolderBrowserScreen(
     }
 
     Column(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp)) {
+        // A Row with a weighted title (rather than a Box with independently-centered
+        // children) so a long folder name never overlaps the shortcut on the right - see
+        // the same fix on PlayListsScreen/PlayerScreen's headers.
+        Row(
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
             Text(
                 folderName,
                 style = MaterialTheme.typography.headlineLarge,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.weight(1f)
             )
             if (onShuffleAll != null) {
-                IconButton(
+                RandomSkipAllShortcut(
                     onClick = onShuffleAll,
-                    modifier = Modifier.align(Alignment.CenterEnd)
-                ) {
-                    Icon(Icons.Default.Shuffle, contentDescription = "Shuffle all songs")
-                }
+                    buttonColorViewModel = buttonColorViewModel
+                )
             }
         }
 
@@ -122,27 +129,27 @@ fun FolderBrowserScreen(
                                 favoritesViewModel = favoritesViewModel,
                                 onClick = { onPlayLeaf(item.playlist) },
                                 isDeleting = deletingUri == item.playlist.folderUri,
-                                onDelete = { deleteFolderItem(item.playlist.folderUri) }
+                                onDelete = { deleteFolderItem(item.playlist.folderUri) },
+                                showFavorite = false
                             )
                         }
                     }
                 }
             }
             else -> {
-                val isSmall = viewMode == PlaylistViewMode.SMALL
-                val columns = if (isSmall) 3 else 2
+                val isCompact = viewMode.isCompact
                 LazyVerticalGrid(
-                    columns = GridCells.Fixed(columns),
+                    columns = GridCells.Fixed(viewMode.gridColumns),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(if (isSmall) 6.dp else 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(if (isSmall) 10.dp else 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(if (isCompact) 6.dp else 12.dp),
+                    verticalArrangement = Arrangement.spacedBy(if (isCompact) 10.dp else 16.dp),
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(current, key = { folderItemKey(it) }) { item ->
                         when (item) {
                             is FolderBrowseItem.SubFolder -> SubFolderGridCard(
                                 item = item,
-                                compact = viewMode == PlaylistViewMode.SMALL,
+                                compact = isCompact,
                                 isDeleting = deletingUri == item.uri,
                                 libraryViewModel = libraryViewModel,
                                 metadataViewModel = metadataViewModel,
@@ -154,10 +161,11 @@ fun FolderBrowserScreen(
                                 playlist = item.playlist,
                                 metadataViewModel = metadataViewModel,
                                 favoritesViewModel = favoritesViewModel,
-                                compact = viewMode == PlaylistViewMode.SMALL,
+                                compact = isCompact,
                                 onClick = { onPlayLeaf(item.playlist) },
                                 isDeleting = deletingUri == item.playlist.folderUri,
-                                onDelete = { deleteFolderItem(item.playlist.folderUri) }
+                                onDelete = { deleteFolderItem(item.playlist.folderUri) },
+                                showFavorite = false
                             )
                         }
                     }
@@ -232,9 +240,6 @@ private fun SubFolderGridCard(
         collageUri = libraryViewModel.findCollageThumbnail(item.uri)
     }
     val scope = rememberCoroutineScope()
-    val favoriteKeys by favoritesViewModel.favoriteKeys.collectAsState()
-    val favoriteKey = item.uri.toString()
-    val isFavorite = favoriteKeys.contains(favoriteKey)
     val progressState = metadataViewModel.progress.collectAsState()
     val isFetchingThis by remember(item.name) {
         derivedStateOf {
@@ -277,27 +282,9 @@ private fun SubFolderGridCard(
                 )
             }
 
-            // Heart sits top-left, sync sits top-right, delete sits bottom-right - kept
-            // clear of both other actions since it's destructive. A whole branching
-            // folder can be favorited or synced as one unit this way, even though it has
-            // no tracks directly inside itself.
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(6.dp)
-                    .size(badgeSize)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
-                    .clickable { favoritesViewModel.toggleFavorite(favoriteKey) },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                    tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(if (compact) 14.dp else 18.dp)
-                )
-            }
+            // Sync sits top-right, delete sits bottom-right - kept clear of each other
+            // since delete is destructive. A whole branching folder can be synced as one
+            // unit this way, even though it has no tracks directly inside itself.
             // Folders that contain only nested subfolders (no songs directly inside) have
             // nothing of their own to fetch metadata for, so this shortcut is hidden there.
             if (item.hasDirectTracks) {
@@ -405,9 +392,6 @@ private fun SubFolderListRow(
         collageUri = libraryViewModel.findCollageThumbnail(item.uri)
     }
     val scope = rememberCoroutineScope()
-    val favoriteKeys by favoritesViewModel.favoriteKeys.collectAsState()
-    val favoriteKey = item.uri.toString()
-    val isFavorite = favoriteKeys.contains(favoriteKey)
     val progressState = metadataViewModel.progress.collectAsState()
     val isFetchingThis by remember(item.name) {
         derivedStateOf {
@@ -450,13 +434,6 @@ private fun SubFolderListRow(
             maxLines = 1,
             modifier = Modifier.weight(1f)
         )
-        IconButton(onClick = { favoritesViewModel.toggleFavorite(favoriteKey) }) {
-            Icon(
-                imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
         // Folders that contain only nested subfolders (no songs directly inside) have
         // nothing of their own to fetch metadata for, so this shortcut is hidden there.
         if (item.hasDirectTracks) {

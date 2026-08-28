@@ -1,5 +1,6 @@
 package com.djkaylfromdownunder.musicplayer.ui
 
+import android.net.Uri
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -37,6 +38,22 @@ fun PlayListsScreen(
         customMetas.map { customPlaylistViewModel.resolve(it, allTracks) }
     }
     val allPlaylists = customPlaylists + folderPlaylists
+
+    // The single playlist currently being deleted, if any - disables its row/card and
+    // shows a spinner instead of the trash icon, matching the Library screen's own
+    // delete affordance. Custom (hand-built) playlists delete instantly since there's no
+    // real folder to remove; folder-backed playlists go through the same recursive
+    // on-disk delete the Library screen uses.
+    var deletingUri by remember { mutableStateOf<Uri?>(null) }
+    fun deletePlaylistItem(playlist: Playlist) {
+        deletingUri = playlist.folderUri
+        if (playlist.folderUri.scheme == "custom") {
+            playlist.folderUri.lastPathSegment?.let { customPlaylistViewModel.delete(it) }
+            deletingUri = null
+        } else {
+            libraryViewModel.deleteFolder(playlist.folderUri) { deletingUri = null }
+        }
+    }
 
     Column(modifier = Modifier.fillMaxSize()) {
         // A Row with a weighted title (rather than a Box with independently-centered
@@ -81,18 +98,20 @@ fun PlayListsScreen(
                         playlist = playlist,
                         metadataViewModel = metadataViewModel,
                         favoritesViewModel = favoritesViewModel,
-                        onClick = { onPlaylistClick(playlist) }
+                        onClick = { onPlaylistClick(playlist) },
+                        isDeleting = deletingUri == playlist.folderUri,
+                        onDelete = { deletePlaylistItem(playlist) },
+                        showFavorite = false
                     )
                 }
             }
         } else {
-            val isSmall = viewMode == PlaylistViewMode.SMALL
-            val columns = if (isSmall) 3 else 2
+            val isCompact = viewMode.isCompact
             LazyVerticalGrid(
-                columns = GridCells.Fixed(columns),
+                columns = GridCells.Fixed(viewMode.gridColumns),
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(if (isSmall) 6.dp else 12.dp),
-                verticalArrangement = Arrangement.spacedBy(if (isSmall) 10.dp else 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(if (isCompact) 6.dp else 12.dp),
+                verticalArrangement = Arrangement.spacedBy(if (isCompact) 10.dp else 16.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(allPlaylists, key = { it.folderUri.toString() }) { playlist ->
@@ -100,8 +119,11 @@ fun PlayListsScreen(
                         playlist = playlist,
                         metadataViewModel = metadataViewModel,
                         favoritesViewModel = favoritesViewModel,
-                        compact = viewMode == PlaylistViewMode.SMALL,
-                        onClick = { onPlaylistClick(playlist) }
+                        compact = isCompact,
+                        onClick = { onPlaylistClick(playlist) },
+                        isDeleting = deletingUri == playlist.folderUri,
+                        onDelete = { deletePlaylistItem(playlist) },
+                        showFavorite = false
                     )
                 }
             }

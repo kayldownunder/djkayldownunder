@@ -11,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -167,7 +168,7 @@ fun PlayerScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onCollapse) {
-                Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Collapse")
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Collapse")
             }
             Text(
                 "Now Playing",
@@ -192,6 +193,7 @@ fun PlayerScreen(
         if (folderUri != null && trackUri != null) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Button(
@@ -215,7 +217,7 @@ fun PlayerScreen(
                         tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                Spacer(modifier = Modifier.weight(1f))
+                Spacer(modifier = Modifier.width(24.dp))
                 IconButton(onClick = { showDeleteDialog = true }, modifier = Modifier.size(40.dp)) {
                     Icon(
                         Icons.Default.Delete,
@@ -676,7 +678,10 @@ private fun PlaybackControls(state: PlayerUiState, viewModel: PlayerViewModel) {
         }
         FilledIconButton(
             onClick = { viewModel.togglePlayPause() },
-            modifier = Modifier.size(44.dp),
+            // Raised above the prev/next row for a floating look - the 16dp gap above the
+            // row (see CompactPlaybackBar) leaves enough headroom that this doesn't
+            // overlap the slider the way a bigger offset did before that gap existed.
+            modifier = Modifier.offset(y = (-4).dp).size(44.dp),
             colors = IconButtonDefaults.filledIconButtonColors(
                 containerColor = MaterialTheme.colorScheme.primary,
                 contentColor = MaterialTheme.colorScheme.onPrimary

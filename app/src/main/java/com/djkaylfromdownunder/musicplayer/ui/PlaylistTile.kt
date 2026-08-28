@@ -42,7 +42,8 @@ fun PlaylistGridCard(
     compact: Boolean,
     onClick: () -> Unit,
     isDeleting: Boolean = false,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    showFavorite: Boolean = true
 ) {
     // progress is a single StateFlow shared by every visible card, ticking on every track
     // fetched anywhere in the app. Reading it directly here would recompose every card on
@@ -85,22 +86,24 @@ fun PlaylistGridCard(
             // Heart sits top-left, sync sits top-right (as far apart as the card allows),
             // delete sits bottom-right below the sync button - the destructive action is
             // kept clear of both other actions and away from the top row entirely.
-            Box(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(6.dp)
-                    .size(badgeSize)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
-                    .clickable { favoritesViewModel.toggleFavorite(favoriteKey) },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                    tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(if (compact) 14.dp else 18.dp)
-                )
+            if (showFavorite) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(6.dp)
+                        .size(badgeSize)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.background.copy(alpha = 0.7f))
+                        .clickable { favoritesViewModel.toggleFavorite(favoriteKey) },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                        tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(if (compact) 14.dp else 18.dp)
+                    )
+                }
             }
             if (!isSynced) {
                 Box(
@@ -207,7 +210,8 @@ fun PlaylistRow(
     favoritesViewModel: FavoritesViewModel,
     onClick: () -> Unit,
     isDeleting: Boolean = false,
-    onDelete: (() -> Unit)? = null
+    onDelete: (() -> Unit)? = null,
+    showFavorite: Boolean = true
 ) {
     val favoriteKeys by favoritesViewModel.favoriteKeys.collectAsState()
     val favoriteKey = playlist.folderUri.toString()
@@ -246,12 +250,14 @@ fun PlaylistRow(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
-        IconButton(onClick = { favoritesViewModel.toggleFavorite(favoriteKey) }) {
-            Icon(
-                imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant
-            )
+        if (showFavorite) {
+            IconButton(onClick = { favoritesViewModel.toggleFavorite(favoriteKey) }) {
+                Icon(
+                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
+                    tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         if (onDelete != null) {
             Spacer(modifier = Modifier.width(8.dp))
