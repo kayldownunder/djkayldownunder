@@ -42,6 +42,26 @@ class CustomPlaylistRepository(context: Context) {
         saveAll(getAll().filterNot { it.id == id })
     }
 
+    fun isFavoriteTrack(trackUri: String): Boolean =
+        getAll().find { it.name == FAVORITES_PLAYLIST_NAME }?.trackUris?.contains(trackUri) == true
+
+    /**
+     * Adds/removes [trackUri] from the "Favorites" custom playlist, creating it on first use.
+     * Returns the new favorited state (true = now in Favorites).
+     */
+    fun toggleFavoriteTrack(trackUri: String): Boolean {
+        val all = getAll()
+        val existing = all.find { it.name == FAVORITES_PLAYLIST_NAME }
+        if (existing == null) {
+            saveAll(all + CustomPlaylistMeta(id = UUID.randomUUID().toString(), name = FAVORITES_PLAYLIST_NAME, trackUris = listOf(trackUri)))
+            return true
+        }
+        val nowFavorite = trackUri !in existing.trackUris
+        val updatedTracks = if (nowFavorite) existing.trackUris + trackUri else existing.trackUris - trackUri
+        saveAll(all.map { if (it.id == existing.id) it.copy(trackUris = updatedTracks) else it })
+        return nowFavorite
+    }
+
     private fun saveAll(list: List<CustomPlaylistMeta>) {
         val arr = JSONArray()
         list.forEach { meta ->
@@ -54,5 +74,9 @@ class CustomPlaylistRepository(context: Context) {
             arr.put(obj)
         }
         file.writeText(arr.toString())
+    }
+
+    companion object {
+        const val FAVORITES_PLAYLIST_NAME = "Favorites"
     }
 }

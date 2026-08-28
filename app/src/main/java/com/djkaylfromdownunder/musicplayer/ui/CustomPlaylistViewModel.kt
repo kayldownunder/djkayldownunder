@@ -28,6 +28,15 @@ class CustomPlaylistViewModel(application: Application) : AndroidViewModel(appli
         _playlists.value = repository.getAll()
     }
 
+    fun isFavoriteTrack(trackUri: String): Boolean = repository.isFavoriteTrack(trackUri)
+
+    /** Adds/removes a track from the "Favorites" playlist. Returns the new favorited state. */
+    fun toggleFavoriteTrack(trackUri: String): Boolean {
+        val nowFavorite = repository.toggleFavoriteTrack(trackUri)
+        _playlists.value = repository.getAll()
+        return nowFavorite
+    }
+
     /**
      * Resolves a saved custom playlist into a real playable Playlist, matching stored
      * track URIs against the full pool of tracks currently known to the library. Uses a

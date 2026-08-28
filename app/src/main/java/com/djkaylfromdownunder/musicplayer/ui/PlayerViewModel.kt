@@ -34,7 +34,8 @@ data class PlayerUiState(
     val queue: List<Track> = emptyList(),         // playable queue - skipped tracks excluded
     val fullTrackList: List<Track> = emptyList(), // every track in the folder, for display
     val currentIndex: Int = -1,
-    val currentPlaylistFolderUri: String? = null
+    val currentPlaylistFolderUri: String? = null,
+    val isShuffleEnabled: Boolean = false
 )
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -63,6 +64,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 controller = controllerFuture.get()
                 Log.d(TAG, "MediaController connected")
                 attachListener()
+                syncStateFromController()
             } catch (e: Exception) {
                 Log.e(TAG, "MediaController failed to connect - playback will silently do nothing until this succeeds", e)
             }
@@ -80,13 +82,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
 
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val index = controller?.currentMediaItemIndex ?: -1
-                val track = currentQueue.getOrNull(index)
+                val track = currentQueue.getOrNull(index) ?: mediaItem?.let { trackFromMediaItem(it) }
+                // Each MediaItem's mediaId carries the URI of the folder it came from (set
+                // in playPlaylist/playShuffledAllTracks) - re-reading it on every transition
+                // keeps the skip-this-song row correct even when the queue spans multiple
+                // folders (shuffle-all), not just the folder active when playback started.
+                val folderUriStr = mediaItem?.mediaId?.takeIf { it.isNotBlank() }
                 Log.d(TAG, "onMediaItemTransition index=$index track=${track?.displayName} reason=$reason")
+                currentFolderUri = folderUriStr ?: currentFolderUri
                 _uiState.value = _uiState.value.copy(
                     currentTrack = track,
                     currentIndex = index,
-                    durationMs = controller?.duration?.coerceAtLeast(0) ?: 0L
+                    durationMs = controller?.duration?.coerceAtLeast(0) ?: 0L,
+                    currentPlaylistFolderUri = folderUriStr ?: _uiState.value.currentPlaylistFolderUri
                 )
+            }
+
+            override fun onShuffleModeEnabledChanged(shuffleModeEnabled: Boolean) {
+                _uiState.value = _uiState.value.copy(isShuffleEnabled = shuffleModeEnabled)
             }
 
             override fun onPlaybackStateChanged(playbackState: Int) {
@@ -119,6 +132,48 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 )
             }
         })
+    }
+
+    /** Best-effort Track reconstructed from a MediaItem's own uri/title - see [syncStateFromController]. */
+    private fun trackFromMediaItem(item: MediaItem): Track? {
+        val uri = item.localConfiguration?.uri ?: return null
+        val title = item.mediaMetadata.title?.toString() ?: uri.lastPathSegment.orEmpty()
+        return Track(uri = uri, displayName = title, fileName = title, sizeBytes = 0L, mimeType = null)
+    }
+
+    /**
+     * Rebuilds UI state directly from whatever the MediaController already has loaded, for
+     * when this ViewModel (re)connects to a playback session that was started by an earlier,
+     * now-gone instance (e.g. the app process was restarted while background playback kept
+     * running in MusicPlaybackService). Without this, opening the Now Playing screen via the
+     * dock shortcut right after such a restart showed "Nothing playing" and hid the
+     * volume/skip/delete row even though a track was audibly playing - this instance's
+     * in-memory currentQueue/currentTrack simply hadn't been populated yet, since that
+     * normally only happens via an explicit playPlaylist call or a later transition event.
+     * Skipped entirely if playPlaylist/playShuffledAllTracks already populated state first.
+     */
+    private fun syncStateFromController() {
+        val c = controller ?: return
+        if (_uiState.value.currentTrack != null || c.mediaItemCount == 0) return
+
+        val items = (0 until c.mediaItemCount).map { c.getMediaItemAt(it) }
+        val tracks = items.mapNotNull { trackFromMediaItem(it) }
+        val index = c.currentMediaItemIndex.coerceIn(0, (tracks.size - 1).coerceAtLeast(0))
+        val folderUriStr = items.getOrNull(index)?.mediaId?.takeIf { it.isNotBlank() }
+
+        currentQueue = tracks
+        currentFolderUri = folderUriStr
+        _uiState.value = _uiState.value.copy(
+            queue = tracks,
+            fullTrackList = tracks,
+            currentTrack = tracks.getOrNull(index),
+            currentIndex = index,
+            currentPlaylistFolderUri = folderUriStr,
+            isPlaying = c.isPlaying,
+            positionMs = c.currentPosition.coerceAtLeast(0),
+            durationMs = c.duration.coerceAtLeast(0),
+            isShuffleEnabled = c.shuffleModeEnabled
+        )
     }
 
     /**
@@ -197,6 +252,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         val mediaItems = effectiveTracks.map { track ->
             MediaItem.Builder()
                 .setUri(track.uri)
+                .setMediaId(folderUriStr)
                 .setMediaMetadata(
                     MediaMetadata.Builder()
                         .setTitle(track.displayName)
@@ -230,6 +286,64 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             fullTrackList = playlist.tracks,
             currentIndex = startIndex,
             currentPlaylistFolderUri = folderUriStr
+        )
+    }
+
+    /**
+     * Toggles Media3's built-in shuffle mode, which randomizes only the playback order
+     * within whatever queue is currently loaded (e.g. the tracks of the album/folder
+     * playing on the Now Playing screen) - skipNext/skipPrevious then walk that shuffled
+     * order automatically.
+     */
+    fun toggleShuffle() {
+        val enabled = !(controller?.shuffleModeEnabled ?: false)
+        controller?.shuffleModeEnabled = enabled
+        _uiState.value = _uiState.value.copy(isShuffleEnabled = enabled)
+    }
+
+    /**
+     * Builds one combined, randomly-ordered queue out of every track in every playlist
+     * passed in (i.e. the whole library, across all folders) and starts playing it from
+     * the top - used by the Library screen's shuffle-all button. Skipped tracks are
+     * excluded per their own folder's skip list, same as a normal playPlaylist. Since this
+     * queue doesn't belong to a single folder, per-folder resume/skip-marking state isn't
+     * tracked for it (currentPlaylistFolderUri is left null).
+     */
+    fun playShuffledAllTracks(playlists: List<Playlist>) {
+        val combined = playlists.flatMap { playlist ->
+            val folderUriStr = playlist.folderUri.toString()
+            playlist.tracks
+                .filterNot { skipListRepository.isSkipped(folderUriStr, it.uri.toString()) }
+                .map { it to folderUriStr }
+        }.shuffled()
+        if (combined.isEmpty()) return
+
+        val combinedTracks = combined.map { it.first }
+        currentPlaylist = null
+        currentFolderUri = combined.first().second
+        currentQueue = combinedTracks
+
+        val mediaItems = combined.map { (track, folderUriStr) ->
+            MediaItem.Builder()
+                .setUri(track.uri)
+                .setMediaId(folderUriStr)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(track.displayName)
+                        .build()
+                )
+                .build()
+        }
+        controller?.apply {
+            setMediaItems(mediaItems, 0, 0L)
+            prepare()
+            play()
+        }
+        _uiState.value = _uiState.value.copy(
+            queue = combinedTracks,
+            fullTrackList = combinedTracks,
+            currentIndex = 0,
+            currentPlaylistFolderUri = combined.first().second
         )
     }
 
