@@ -21,6 +21,10 @@ android {
 
     buildTypes {
         release {
+            // Signed with the auto-generated debug keystore so this build type stays
+            // installable for testing. Not suitable for a real release/Play Store upload -
+            // swap in a dedicated release keystore before distributing outside the team.
+            signingConfig = signingConfigs.getByName("debug")
             optimization {
                 enable = false
             }
