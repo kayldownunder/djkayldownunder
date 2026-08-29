@@ -8,7 +8,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -71,7 +70,7 @@ fun CreatePlaylistScreen(
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
-            placeholder = { Text("Playlist name") },
+            placeholder = { Text("Playlist name (optional - defaults to \"Play List N\")") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
         )
@@ -91,27 +90,6 @@ fun CreatePlaylistScreen(
                 style = MaterialTheme.typography.titleMedium,
                 modifier = Modifier.weight(1f)
             )
-            if (showFavoritesOnly) {
-                // Ticked favorite tracks are already headed into this playlist via
-                // `selected` - this just also unfavorites them, so building a playlist out
-                // of favorites doubles as clearing them out of the favorites list. `selected`
-                // is a SnapshotStateList, so reading it here already recomposes this on
-                // every check/uncheck without needing an explicit remember key.
-                val checkedFavorites = selected.filter { it.uri.toString() in favoriteTrackUris }
-                IconButton(
-                    onClick = {
-                        checkedFavorites.forEach { track ->
-                            customPlaylistViewModel.toggleFavoriteTrack(track.uri.toString())
-                        }
-                    },
-                    enabled = checkedFavorites.isNotEmpty()
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Add,
-                        contentDescription = "Move checked songs into this playlist and remove them from Favorites"
-                    )
-                }
-            }
             IconButton(onClick = { showFavoritesOnly = !showFavoritesOnly }) {
                 Icon(
                     imageVector = Icons.Default.Favorite,
@@ -183,12 +161,22 @@ fun CreatePlaylistScreen(
 
         Button(
             onClick = {
-                if (name.isNotBlank() && selected.isNotEmpty()) {
-                    customPlaylistViewModel.create(name.trim(), selected.map { it.uri.toString() })
+                if (selected.isNotEmpty()) {
+                    val finalName = name.trim().ifBlank {
+                        "Play List ${customPlaylistViewModel.customPlaylistCount() + 1}"
+                    }
+                    // Songs pulled in from Favorites are now organized into this new
+                    // playlist, so they're cleared out of Favorites at the same time.
+                    selected.forEach { track ->
+                        if (track.uri.toString() in favoriteTrackUris) {
+                            customPlaylistViewModel.toggleFavoriteTrack(track.uri.toString())
+                        }
+                    }
+                    customPlaylistViewModel.create(finalName, selected.map { it.uri.toString() })
                     onDone()
                 }
             },
-            enabled = name.isNotBlank() && selected.isNotEmpty(),
+            enabled = selected.isNotEmpty(),
             modifier = Modifier.fillMaxWidth().padding(16.dp)
         ) {
             Text("Create Playlist")

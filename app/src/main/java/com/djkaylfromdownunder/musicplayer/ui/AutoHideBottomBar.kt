@@ -34,32 +34,42 @@ private const val AUTO_HIDE_DELAY_MS = 4_000L
 private val REVEAL_DRAG_THRESHOLD = 20.dp
 
 /**
- * Wraps a bottom bar so it auto-hides after [AUTO_HIDE_DELAY_MS] of being left alone,
- * sliding down out of view. A small drag handle takes its place - dragging it upward
- * brings the bar back and restarts the same countdown. Used for the mini-player/dock on
- * Library and Play Lists (see AppNavHost) and for the compact playback bar on the Player
- * screen, so the content above gets more room once the bar is out of the way.
+ * Wraps the bottom mini-player/dock so it auto-hides after [AUTO_HIDE_DELAY_MS] of being
+ * left alone, sliding down out of view. A small drag handle takes its place - dragging it
+ * upward brings the bar back and restarts the same countdown. Used only on the Library and
+ * Play Lists screens (see AppNavHost), so the content above gets more room once the bar is
+ * out of the way - deliberately not used on the Player screen, whose playback controls
+ * (play/pause, skip forward/back) are the only transport controls there and must always
+ * stay visible.
+ *
+ * [forceVisible] pins the bar on screen and pauses the countdown - e.g. while a dock icon
+ * is being drag-reordered, and for a short window after - starting a fresh countdown only
+ * once it turns back off.
  */
 @Composable
-fun AutoHideBottomBar(content: @Composable () -> Unit) {
+fun AutoHideBottomBar(forceVisible: Boolean = false, content: @Composable () -> Unit) {
     var isVisible by remember { mutableStateOf(true) }
 
-    LaunchedEffect(isVisible) {
-        if (isVisible) {
+    LaunchedEffect(forceVisible) {
+        if (forceVisible) isVisible = true
+    }
+    LaunchedEffect(isVisible, forceVisible) {
+        if (isVisible && !forceVisible) {
             delay(AUTO_HIDE_DELAY_MS)
             isVisible = false
         }
     }
 
+    val shown = isVisible || forceVisible
     Column(modifier = Modifier.fillMaxWidth()) {
         AnimatedVisibility(
-            visible = isVisible,
+            visible = shown,
             enter = slideInVertically(initialOffsetY = { it }),
             exit = slideOutVertically(targetOffsetY = { it })
         ) {
             content()
         }
-        if (!isVisible) {
+        if (!shown) {
             RevealHandle(onReveal = { isVisible = true })
         }
     }

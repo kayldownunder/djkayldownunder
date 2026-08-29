@@ -24,7 +24,10 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInRoot
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -146,6 +149,33 @@ fun PlayerScreen(
         artHeightPx = maxArtHeightPx
     }
 
+    // Aligns Skip under the "N" of "Now Playing" and Delete under the "g" of "Playing":
+    // the title's own left edge plus its text layout's per-character bounding boxes give
+    // the exact on-screen x-position of each letter (independent of font/device/whether
+    // the shortcut icon is present), and each button's *default* (pre-offset) position -
+    // captured once, the first time it's laid out - is what the offset is measured from.
+    var titleTextLeftPx by remember { mutableStateOf<Float?>(null) }
+    var titleLayoutResult by remember { mutableStateOf<TextLayoutResult?>(null) }
+    var skipDefaultCenterPx by remember { mutableStateOf<Float?>(null) }
+    var deleteDefaultCenterPx by remember { mutableStateOf<Float?>(null) }
+
+    val nLetterCenterPx = titleLayoutResult?.let { layout ->
+        titleTextLeftPx?.let { left -> left + layout.getBoundingBox(0).center.x }
+    }
+    val gLetterCenterPx = titleLayoutResult?.let { layout ->
+        titleTextLeftPx?.let { left ->
+            left + layout.getBoundingBox(layout.layoutInput.text.length - 1).center.x
+        }
+    }
+    val skipDefault = skipDefaultCenterPx
+    val deleteDefault = deleteDefaultCenterPx
+    val skipOffset = if (nLetterCenterPx != null && skipDefault != null) {
+        with(density) { (nLetterCenterPx - skipDefault).toDp() }
+    } else 0.dp
+    val deleteOffset = if (gLetterCenterPx != null && deleteDefault != null) {
+        with(density) { (gLetterCenterPx - deleteDefault).toDp() }
+    } else 0.dp
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -176,11 +206,15 @@ fun PlayerScreen(
                 textAlign = TextAlign.Center,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f)
+                modifier = Modifier
+                    .weight(1f)
+                    .onGloballyPositioned { titleTextLeftPx = it.positionInRoot().x },
+                onTextLayout = { titleLayoutResult = it }
             )
             if (allPlaylists.isNotEmpty()) {
                 RandomSkipAllShortcut(
-                    onClick = { viewModel.playShuffledAllTracks(allPlaylists) },
+                    isActive = state.isShuffleAllActive,
+                    onClick = { viewModel.toggleShuffleAllAlbums(allPlaylists) },
                     buttonColorViewModel = buttonColorViewModel
                 )
             }
@@ -204,7 +238,14 @@ fun PlayerScreen(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
-                    modifier = Modifier.height(40.dp)
+                    modifier = Modifier
+                        .height(40.dp)
+                        .onGloballyPositioned {
+                            if (skipDefaultCenterPx == null) {
+                                skipDefaultCenterPx = it.positionInRoot().x + it.size.width / 2f
+                            }
+                        }
+                        .offset(x = skipOffset)
                 ) {
                     Text("Skip")
                 }
@@ -218,7 +259,17 @@ fun PlayerScreen(
                         tint = if (isFavorite) FavoriteRed else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                IconButton(onClick = { showDeleteDialog = true }, modifier = Modifier.size(40.dp)) {
+                IconButton(
+                    onClick = { showDeleteDialog = true },
+                    modifier = Modifier
+                        .size(40.dp)
+                        .onGloballyPositioned {
+                            if (deleteDefaultCenterPx == null) {
+                                deleteDefaultCenterPx = it.positionInRoot().x + it.size.width / 2f
+                            }
+                        }
+                        .offset(x = deleteOffset)
+                ) {
                     Icon(
                         Icons.Default.Delete,
                         contentDescription = "Delete",
@@ -410,12 +461,11 @@ fun PlayerScreen(
             }
         }
 
-        // Slim playback bar pinned to the very bottom of the screen - progress line plus
-        // previous/play-pause/next. Wrapped in AutoHideBottomBar so it slides away after
-        // 4s idle just like the mini-player/dock on Library and Play Lists, leaving a
-        // drag-up handle so the artwork and track list above get the full screen once the
-        // user isn't actively using transport controls.
-        AutoHideBottomBar(content = { CompactPlaybackBar(state = state, viewModel = viewModel) })
+        // Slim, always-visible playback bar pinned to the very bottom of the screen -
+        // progress line plus previous/play-pause/next. Never auto-hidden: unlike the
+        // Library/Play Lists dock, these are the only transport controls on this screen,
+        // so they must stay reachable at all times.
+        CompactPlaybackBar(state = state, viewModel = viewModel)
     }
 }
 

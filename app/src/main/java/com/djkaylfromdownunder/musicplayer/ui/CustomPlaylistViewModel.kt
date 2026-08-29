@@ -30,6 +30,9 @@ class CustomPlaylistViewModel(application: Application) : AndroidViewModel(appli
 
     fun isFavoriteTrack(trackUri: String): Boolean = repository.isFavoriteTrack(trackUri)
 
+    /** Number of user-created playlists so far (excluding "Favorites"), for default-naming a new one. */
+    fun customPlaylistCount(): Int = repository.customPlaylistCount()
+
     /** Adds/removes a track from the "Favorites" playlist. Returns the new favorited state. */
     fun toggleFavoriteTrack(trackUri: String): Boolean {
         val nowFavorite = repository.toggleFavoriteTrack(trackUri)

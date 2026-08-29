@@ -11,6 +11,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -29,6 +30,11 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.djkaylfromdownunder.musicplayer.data.BackgroundTarget
 import com.djkaylfromdownunder.musicplayer.ui.*
+import kotlinx.coroutines.delay
+
+// How long the dock's auto-hide bar is held on screen after a drag-reorder change, so
+// finishing a reorder doesn't immediately get swallowed by the bar sliding away.
+private const val DOCK_REORDER_LOCK_MS = 10_000L
 
 object Routes {
     const val LIBRARY = "library"
@@ -64,6 +70,7 @@ fun AppNavHost() {
     val fontPreferencesViewModel: FontPreferencesViewModel = viewModel()
     val settingsLayoutViewModel: SettingsLayoutViewModel = viewModel()
     val buttonColorViewModel: ButtonColorViewModel = viewModel()
+    val audioNormalizationViewModel: AudioNormalizationViewModel = viewModel()
 
     var showViewSheet by remember { mutableStateOf(false) }
 
@@ -79,8 +86,34 @@ fun AppNavHost() {
         Routes.PLAYER, Routes.SKIP_REVIEW, Routes.SEARCH, Routes.CREATE_PLAYLIST
     )
 
+    // "Random Skip All Albums" is a single shared toggle (PlayerViewModel.uiState) rather
+    // than something each screen's shortcut owns independently - collected once here so
+    // the Library, Play Lists, and Now Playing screens' shortcuts all stay in sync:
+    // turning it on/off from any one of them highlights (or un-highlights) the button on
+    // every other screen it appears on too.
+    val playerUiState by playerViewModel.uiState.collectAsState()
+    val isShuffleAllActive = playerUiState.isShuffleAllActive
+
     val visibleDockIds by dockPreferencesViewModel.visibleIds.collectAsState()
     val dockItems = remember(visibleDockIds) { dockPreferencesViewModel.resolve(visibleDockIds) }
+
+    // Reordering the dock shouldn't fight the auto-hide bar: it's pinned visible for the
+    // whole drag, and for a further DOCK_REORDER_LOCK_MS after each change lands, so the
+    // result is still on screen once the finger lifts instead of immediately sliding away.
+    var dockReorderChangeTick by remember { mutableStateOf(0) }
+    var dockRecentlyReordered by remember { mutableStateOf(false) }
+    val dockDragState = rememberGridReorderState { ids ->
+        dockPreferencesViewModel.setOrderedIds(ids)
+        dockReorderChangeTick++
+    }
+    LaunchedEffect(dockReorderChangeTick) {
+        if (dockReorderChangeTick > 0) {
+            dockRecentlyReordered = true
+            delay(DOCK_REORDER_LOCK_MS)
+            dockRecentlyReordered = false
+        }
+    }
+    val keepDockBarVisible = dockDragState.isAnyDragging || dockRecentlyReordered
 
     Scaffold(
             bottomBar = {
@@ -95,6 +128,7 @@ fun AppNavHost() {
                             AppBottomNav(
                                 dockItems = dockItems,
                                 currentRoute = if (isFolderRoute) Routes.LIBRARY else currentRoute,
+                                dragState = dockDragState,
                                 onNavigate = { route ->
                                     navController.navigate(route) {
                                         popUpTo(Routes.LIBRARY) { inclusive = false }
@@ -102,8 +136,7 @@ fun AppNavHost() {
                                     }
                                 },
                                 onPushNavigate = { route -> navController.navigate(route) },
-                                onViewClick = { showViewSheet = true },
-                                onReorder = { ids -> dockPreferencesViewModel.setOrderedIds(ids) }
+                                onViewClick = { showViewSheet = true }
                             )
                         }
                     }
@@ -111,7 +144,7 @@ fun AppNavHost() {
                     // folder browsing) and Play Lists - every other tab keeps the bar
                     // permanently visible.
                     if (isFolderRoute || currentRoute == Routes.LIBRARY || currentRoute == Routes.PLAYLISTS) {
-                        AutoHideBottomBar(content = bar)
+                        AutoHideBottomBar(forceVisible = keepDockBarVisible, content = bar)
                     } else {
                         bar()
                     }
@@ -147,9 +180,10 @@ fun AppNavHost() {
                                     playerViewModel.playPlaylist(playlist)
                                     navController.navigate(Routes.PLAYER)
                                 },
+                                isShuffleAllActive = isShuffleAllActive,
                                 onShuffleAll = if (allPlaylists.isNotEmpty()) {
                                     {
-                                        playerViewModel.playShuffledAllTracks(allPlaylists)
+                                        playerViewModel.toggleShuffleAllAlbums(allPlaylists)
                                         navController.navigate(Routes.PLAYER)
                                     }
                                 } else null
@@ -201,12 +235,13 @@ fun AppNavHost() {
                         customPlaylistViewModel = customPlaylistViewModel,
                         viewPreferencesViewModel = viewPreferencesViewModel,
                         buttonColorViewModel = buttonColorViewModel,
+                        isShuffleAllActive = isShuffleAllActive,
                         onPlaylistClick = { playlist ->
                             playerViewModel.playPlaylist(playlist)
                             navController.navigate(Routes.PLAYER)
                         },
                         onRandomSkipAllAlbums = { playlists ->
-                            playerViewModel.playShuffledAllTracks(playlists)
+                            playerViewModel.toggleShuffleAllAlbums(playlists)
                             navController.navigate(Routes.PLAYER)
                         }
                     )
@@ -257,6 +292,7 @@ fun AppNavHost() {
                             settingsLayoutViewModel = settingsLayoutViewModel,
                             dockPreferencesViewModel = dockPreferencesViewModel,
                             buttonColorViewModel = buttonColorViewModel,
+                            audioNormalizationViewModel = audioNormalizationViewModel,
                             onNavigateToSkipReview = { navController.navigate(Routes.SKIP_REVIEW) }
                         )
                     }

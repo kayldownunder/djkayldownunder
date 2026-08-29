@@ -30,21 +30,23 @@ private const val DOCK_COLUMNS = 4
  * single flat ordered list under a fixed-column grid rather than two independent rows. See
  * [DragReorderGrid] for the shared long-press-drag mechanism (also used by the Settings
  * screen's own shortcut grid) - `Modifier.animateItem()` on the non-dragged icons is what
- * gives the "other icons slide out of the way live" feel as one is dragged past them.
- * [onReorder] is called with the full new id order on every slot change - the live dock
- * saves as you drag, unlike a separate "commit on exit" editor screen.
+ * gives the "other icons slide out of the way live" feel as one is dragged past them. The
+ * shuffle previews live as you drag, but the new order is only persisted once (via
+ * [dragState]'s `onReorder`) when the finger lifts - [dragState] is hoisted to the caller
+ * (see AppNavHost) rather than created here, so it can also keep the auto-hide bottom bar
+ * pinned visible for the duration of the drag.
  */
 @Composable
 fun AppBottomNav(
     dockItems: List<DockItemDef>,
     currentRoute: String?,
+    dragState: GridReorderState,
     onNavigate: (String) -> Unit,
     onPushNavigate: (String) -> Unit,
-    onViewClick: () -> Unit,
-    onReorder: (List<String>) -> Unit = {}
+    onViewClick: () -> Unit
 ) {
-    val dragState = rememberGridReorderState(onReorder)
     val ids = dockItems.map { it.id }
+    val displayItems = dragState.displayOrder(dockItems) { it.id }
 
     LazyVerticalGrid(
         columns = GridCells.Fixed(DOCK_COLUMNS),
@@ -57,7 +59,7 @@ fun AppBottomNav(
             .navigationBarsPadding()
             .height(112.dp)
     ) {
-        itemsIndexed(dockItems, key = { _, item -> item.id }) { _, item ->
+        itemsIndexed(displayItems, key = { _, item -> item.id }) { _, item ->
             val selected = item.actionType != DockActionType.VIEW_SHEET && currentRoute == item.route
             val isDragging = dragState.isDragging(item.id)
             DockIconButton(

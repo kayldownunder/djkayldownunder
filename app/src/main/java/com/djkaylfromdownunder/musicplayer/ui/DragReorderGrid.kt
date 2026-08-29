@@ -12,6 +12,13 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+
+// How much closer the pointer needs to be to a neighboring slot than to the dragged item's
+// own slot before the two swap - stops a slot flickering back and forth when the finger
+// hovers right on the boundary between two items.
+private val SWAP_MARGIN: Dp = 12.dp
 
 /**
  * Shared long-press-drag reorder mechanism for any fixed-column [androidx.compose.foundation.lazy.grid.LazyVerticalGrid]
@@ -23,55 +30,82 @@ import androidx.compose.ui.layout.positionInWindow
  * rows/columns are directly comparable) via [dragReorderItem]. While dragging, the pointer's
  * live position is approximated as "the dragged item's last reported center plus the total
  * drag delta so far" - close enough since a long press starts with the finger already on the
- * item - and every drag tick moves the dragged id to whichever other item's slot is nearest,
- * calling [onReorder] with the full new id order. The grid itself is expected to animate the
- * resulting shuffle via `Modifier.animateItem()` on the non-dragged items (see AppBottomNav /
- * SettingsScreen), which is what gives the "other items slide out of the way live" feel.
+ * item. The order shown while dragging (see [displayOrder]) shuffles live as the pointer
+ * crosses into another item's slot - past a small hysteresis margin so a twitchy finger right
+ * on the boundary doesn't flicker back and forth - but that's only a preview: the real,
+ * persisted order (via [onReorder]) is committed once, when the finger lifts, so a drag in
+ * progress never repeatedly saves or drags neighboring icons through multiple unintended
+ * positions before the user has settled on one.
  */
 class GridReorderState(private val onReorder: (List<String>) -> Unit) {
     var draggingId by mutableStateOf<String?>(null)
         private set
     var dragOffset by mutableStateOf(Offset.Zero)
         private set
+    var previewIds by mutableStateOf<List<String>>(emptyList())
+        private set
+    private var baseIds: List<String> = emptyList()
     private var itemCenters by mutableStateOf<Map<String, Offset>>(emptyMap())
 
     val isAnyDragging: Boolean get() = draggingId != null
     fun isDragging(id: String): Boolean = draggingId == id
     fun dragOffsetFor(id: String): Offset = if (draggingId == id) dragOffset else Offset.Zero
 
+    /** The order to render: the live drag preview while dragging, otherwise [committed] unchanged. */
+    fun <T> displayOrder(committed: List<T>, idOf: (T) -> String): List<T> {
+        if (!isAnyDragging) return committed
+        val byId = committed.associateBy(idOf)
+        return previewIds.mapNotNull { byId[it] }
+    }
+
     fun reportPosition(id: String, center: Offset) {
         itemCenters = itemCenters + (id to center)
     }
 
-    fun start(id: String) {
+    fun start(id: String, currentIds: List<String>) {
         draggingId = id
         dragOffset = Offset.Zero
+        baseIds = currentIds
+        previewIds = currentIds
     }
 
-    fun drag(delta: Offset, currentIds: List<String>) {
+    fun drag(delta: Offset, swapMarginPx: Float) {
         val draggedId = draggingId ?: return
         dragOffset += delta
-        val draggedCenter = itemCenters[draggedId] ?: return
-        val pointerPos = draggedCenter + dragOffset
-        val nearestId = itemCenters
-            .filterKeys { it in currentIds }
-            .minByOrNull { (_, center) -> (center - pointerPos).getDistanceSquared() }
-            ?.key
-        if (nearestId == null || nearestId == draggedId) return
+        val ownCenter = itemCenters[draggedId] ?: return
+        val pointerPos = ownCenter + dragOffset
+        val candidates = itemCenters.filterKeys { it in previewIds }
+        val ownDistance = (ownCenter - pointerPos).getDistance()
+        val nearestEntry = candidates.minByOrNull { (_, center) -> (center - pointerPos).getDistance() } ?: return
+        val nearestId = nearestEntry.key
+        if (nearestId == draggedId) return
+        val nearestDistance = (nearestEntry.value - pointerPos).getDistance()
+        // Requires the pointer to be *clearly* closer to the neighboring slot, not just past
+        // the midpoint, before the swap actually happens.
+        if (ownDistance - nearestDistance < swapMarginPx) return
 
-        val fromIndex = currentIds.indexOf(draggedId)
-        val toIndex = currentIds.indexOf(nearestId)
+        val fromIndex = previewIds.indexOf(draggedId)
+        val toIndex = previewIds.indexOf(nearestId)
         if (fromIndex < 0 || toIndex < 0) return
 
-        val reordered = currentIds.toMutableList()
+        val reordered = previewIds.toMutableList()
         val moved = reordered.removeAt(fromIndex)
         reordered.add(toIndex, moved)
-        onReorder(reordered)
+        previewIds = reordered
     }
 
+    /** Commits the preview order - if it actually changed - now that the finger has lifted. */
     fun end() {
+        if (draggingId != null && previewIds != baseIds) onReorder(previewIds)
         draggingId = null
         dragOffset = Offset.Zero
+    }
+
+    /** Drops the live preview and reverts to the committed order, e.g. on a cancelled gesture. */
+    fun cancel() {
+        draggingId = null
+        dragOffset = Offset.Zero
+        previewIds = baseIds
     }
 }
 
@@ -79,7 +113,7 @@ class GridReorderState(private val onReorder: (List<String>) -> Unit) {
 fun rememberGridReorderState(onReorder: (List<String>) -> Unit): GridReorderState =
     remember { GridReorderState(onReorder) }
 
-/** Reports this item's position and drives long-press-drag on it. [currentIds] is read fresh on every drag tick. */
+/** Reports this item's position and drives long-press-drag on it. [currentIds] seeds the drag preview on press. */
 fun Modifier.dragReorderItem(
     state: GridReorderState,
     id: String,
@@ -91,13 +125,14 @@ fun Modifier.dragReorderItem(
         state.reportPosition(id, Offset(topLeft.x + size.width / 2f, topLeft.y + size.height / 2f))
     }
     .pointerInput(id) {
+        val swapMarginPx = SWAP_MARGIN.toPx()
         detectDragGesturesAfterLongPress(
-            onDragStart = { state.start(id) },
+            onDragStart = { state.start(id, currentIds()) },
             onDragEnd = { state.end() },
-            onDragCancel = { state.end() },
+            onDragCancel = { state.cancel() },
             onDrag = { change, dragAmount ->
                 change.consume()
-                state.drag(dragAmount, currentIds())
+                state.drag(dragAmount, swapMarginPx)
             }
         )
     }

@@ -32,9 +32,14 @@ class CustomPlaylistRepository(context: Context) {
         }.getOrDefault(emptyList())
     }
 
+    /** Counts user-created playlists (excluding the "Favorites" playlist), for default-naming new ones. */
+    fun customPlaylistCount(): Int = getAll().count { it.name != FAVORITES_PLAYLIST_NAME }
+
     fun create(name: String, trackUris: List<String>): CustomPlaylistMeta {
         val meta = CustomPlaylistMeta(id = UUID.randomUUID().toString(), name = name, trackUris = trackUris)
-        saveAll(getAll() + meta)
+        // Prepended, not appended, so a freshly created playlist shows up at the top of the
+        // Play Lists screen instead of getting buried at the bottom.
+        saveAll(listOf(meta) + getAll())
         return meta
     }
 

@@ -44,6 +44,7 @@ fun FolderBrowserScreen(
     buttonColorViewModel: ButtonColorViewModel,
     onNavigateToSubfolder: (Uri, String) -> Unit,
     onPlayLeaf: (Playlist) -> Unit,
+    isShuffleAllActive: Boolean = false,
     onShuffleAll: (() -> Unit)? = null
 ) {
     var items by remember(folderUri) { mutableStateOf<List<FolderBrowseItem>?>(null) }
@@ -71,9 +72,10 @@ fun FolderBrowserScreen(
     Column(modifier = Modifier.fillMaxSize()) {
         // A Row with a weighted title (rather than a Box with independently-centered
         // children) so a long folder name never overlaps the shortcut on the right - see
-        // the same fix on PlayListsScreen/PlayerScreen's headers.
+        // the same fix on PlayListsScreen/PlayerScreen's headers. statusBarsPadding() keeps
+        // the shortcut clear of the status bar icons, same reasoning as those screens.
         Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Text(
@@ -86,6 +88,7 @@ fun FolderBrowserScreen(
             )
             if (onShuffleAll != null) {
                 RandomSkipAllShortcut(
+                    isActive = isShuffleAllActive,
                     onClick = onShuffleAll,
                     buttonColorViewModel = buttonColorViewModel
                 )
@@ -348,9 +351,13 @@ private fun SubFolderGridCard(
         Spacer(modifier = Modifier.height(if (compact) 4.dp else 8.dp))
         Text(
             text = item.name,
-            style = if (compact) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                    else MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-            maxLines = 1
+            // Two typography steps smaller than before (bodyMedium/bodyLarge), and wraps
+            // to a second line instead of ellipsizing, since a folder card's name is often
+            // the only way to tell two similarly-thumbnailed folders apart.
+            style = if (compact) MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
+                    else MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis
         )
     }
 

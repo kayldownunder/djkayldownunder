@@ -35,7 +35,8 @@ data class PlayerUiState(
     val fullTrackList: List<Track> = emptyList(), // every track in the folder, for display
     val currentIndex: Int = -1,
     val currentPlaylistFolderUri: String? = null,
-    val isShuffleEnabled: Boolean = false
+    val isShuffleEnabled: Boolean = false,
+    val isShuffleAllActive: Boolean = false  // "Random Skip All Albums" mode - see PlayerViewModel
 )
 
 class PlayerViewModel(application: Application) : AndroidViewModel(application) {
@@ -44,6 +45,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var currentQueue: List<Track> = emptyList()
     private var currentFolderUri: String? = null
     private var currentPlaylist: Playlist? = null
+
+    // "Random Skip All Albums" mode state: the full library to pick from, and the actual
+    // sequence of tracks played while the mode has been on (not a pre-shuffled queue - each
+    // Next/auto-advance picks fresh) so Previous can walk back through real playback history.
+    private var shuffleAllPool: List<Playlist> = emptyList()
+    private var shuffleHistory: MutableList<Pair<Track, String>> = mutableListOf()
+    private var shuffleHistoryPos: Int = -1
 
     private val playbackStateRepository = PlaybackStateRepository(application)
     private val skipListRepository = SkipListRepository(application)
@@ -84,7 +92,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                 val index = controller?.currentMediaItemIndex ?: -1
                 val track = currentQueue.getOrNull(index) ?: mediaItem?.let { trackFromMediaItem(it) }
                 // Each MediaItem's mediaId carries the URI of the folder it came from (set
-                // in playPlaylist/playShuffledAllTracks) - re-reading it on every transition
+                // in playPlaylist/playSingleTrack) - re-reading it on every transition
                 // keeps the skip-this-song row correct even when the queue spans multiple
                 // folders (shuffle-all), not just the folder active when playback started.
                 val folderUriStr = mediaItem?.mediaId?.takeIf { it.isNotBlank() }
@@ -111,6 +119,13 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     else -> "UNKNOWN($playbackState)"
                 }
                 Log.d(TAG, "onPlaybackStateChanged state=$stateName currentTrack=${_uiState.value.currentTrack?.displayName}")
+                // "Random Skip All Albums": a track ending naturally (queue is always just
+                // the one track while this mode is active, so ending means STATE_ENDED, not
+                // an automatic transition to a next queued item) picks another random track,
+                // same as pressing Next.
+                if (playbackState == Player.STATE_ENDED && _uiState.value.isShuffleAllActive) {
+                    playRandomTrackFromPool(pushHistory = true)
+                }
             }
 
             // This is the gap most likely behind "playback locks up and won't respond until
@@ -150,7 +165,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
      * volume/skip/delete row even though a track was audibly playing - this instance's
      * in-memory currentQueue/currentTrack simply hadn't been populated yet, since that
      * normally only happens via an explicit playPlaylist call or a later transition event.
-     * Skipped entirely if playPlaylist/playShuffledAllTracks already populated state first.
+     * Skipped entirely if playPlaylist/toggleShuffleAllAlbums already populated state first.
      */
     private fun syncStateFromController() {
         val c = controller ?: return
@@ -302,48 +317,87 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Builds one combined, randomly-ordered queue out of every track in every playlist
-     * passed in (i.e. the whole library, across all folders) and starts playing it from
-     * the top - used by the Library screen's shuffle-all button. Skipped tracks are
-     * excluded per their own folder's skip list, same as a normal playPlaylist. Since this
-     * queue doesn't belong to a single folder, per-folder resume/skip-marking state isn't
-     * tracked for it (currentPlaylistFolderUri is left null).
+     * Toggles "Random Skip All Albums" mode (the shuffle-all shortcut on the Player,
+     * Library, and Play Lists screens). Turning it on never interrupts whatever's already
+     * loaded - it just switches Next/Previous/end-of-track over to the random-across-every-
+     * album behavior below - except when nothing is loaded yet (e.g. the shortcut is
+     * tapped before anything has ever played), in which case it bootstraps by picking a
+     * random track itself. Turning it off simply stops applying that behavior going
+     * forward; whatever's currently playing keeps playing.
      */
-    fun playShuffledAllTracks(playlists: List<Playlist>) {
-        val combined = playlists.flatMap { playlist ->
+    fun toggleShuffleAllAlbums(playlists: List<Playlist>) {
+        shuffleAllPool = playlists
+        val activating = !_uiState.value.isShuffleAllActive
+        _uiState.value = _uiState.value.copy(isShuffleAllActive = activating)
+        if (!activating) return
+
+        val current = _uiState.value.currentTrack
+        if (current != null) {
+            shuffleHistory = mutableListOf(current to currentFolderUri.orEmpty())
+            shuffleHistoryPos = 0
+        } else {
+            shuffleHistory = mutableListOf()
+            shuffleHistoryPos = -1
+            playRandomTrackFromPool(pushHistory = true)
+        }
+    }
+
+    /**
+     * Picks a random track from every album in [shuffleAllPool] (skipped tracks excluded
+     * per their own folder's skip list, same as a normal playPlaylist) and plays it -
+     * avoiding an immediate repeat of the current track when there's more than one
+     * candidate. Used by Next and by natural end-of-track while shuffle-all is active. When
+     * [pushHistory] is true the pick is appended to [shuffleHistory], discarding any
+     * "forward" entries past the current position first (mirrors normal back/forward-stack
+     * behavior after a Previous).
+     */
+    private fun playRandomTrackFromPool(pushHistory: Boolean) {
+        val pool = shuffleAllPool.flatMap { playlist ->
             val folderUriStr = playlist.folderUri.toString()
             playlist.tracks
                 .filterNot { skipListRepository.isSkipped(folderUriStr, it.uri.toString()) }
                 .map { it to folderUriStr }
-        }.shuffled()
-        if (combined.isEmpty()) return
-
-        val combinedTracks = combined.map { it.first }
-        currentPlaylist = null
-        currentFolderUri = combined.first().second
-        currentQueue = combinedTracks
-
-        val mediaItems = combined.map { (track, folderUriStr) ->
-            MediaItem.Builder()
-                .setUri(track.uri)
-                .setMediaId(folderUriStr)
-                .setMediaMetadata(
-                    MediaMetadata.Builder()
-                        .setTitle(track.displayName)
-                        .build()
-                )
-                .build()
         }
+        if (pool.isEmpty()) return
+
+        val currentUri = _uiState.value.currentTrack?.uri
+        val candidates = if (pool.size > 1) pool.filterNot { it.first.uri == currentUri } else pool
+        val (track, folderUriStr) = candidates.random()
+
+        if (pushHistory) {
+            while (shuffleHistory.size > shuffleHistoryPos + 1) shuffleHistory.removeAt(shuffleHistory.lastIndex)
+            shuffleHistory.add(track to folderUriStr)
+            shuffleHistoryPos = shuffleHistory.lastIndex
+        }
+        playSingleTrack(track, folderUriStr)
+    }
+
+    /** Loads and plays a single track outside of any playlist context - used by shuffle-all. */
+    private fun playSingleTrack(track: Track, folderUriStr: String) {
+        currentPlaylist = null
+        currentFolderUri = folderUriStr
+        currentQueue = listOf(track)
+
+        val mediaItem = MediaItem.Builder()
+            .setUri(track.uri)
+            .setMediaId(folderUriStr)
+            .setMediaMetadata(
+                MediaMetadata.Builder()
+                    .setTitle(track.displayName)
+                    .build()
+            )
+            .build()
         controller?.apply {
-            setMediaItems(mediaItems, 0, 0L)
+            setMediaItems(listOf(mediaItem), 0, 0L)
             prepare()
             play()
         }
         _uiState.value = _uiState.value.copy(
-            queue = combinedTracks,
-            fullTrackList = combinedTracks,
+            queue = listOf(track),
+            fullTrackList = listOf(track),
+            currentTrack = track,
             currentIndex = 0,
-            currentPlaylistFolderUri = combined.first().second
+            currentPlaylistFolderUri = folderUriStr
         )
     }
 
@@ -361,8 +415,36 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         }
     }
 
-    fun skipNext() = controller?.seekToNextMediaItem()
-    fun skipPrevious() = controller?.seekToPreviousMediaItem()
+    /**
+     * While "Random Skip All Albums" is active, picks a fresh random track from every
+     * album instead of stepping to the next item in whatever queue happens to be loaded.
+     */
+    fun skipNext() {
+        if (_uiState.value.isShuffleAllActive) {
+            playRandomTrackFromPool(pushHistory = true)
+        } else {
+            controller?.seekToNextMediaItem()
+        }
+    }
+
+    /**
+     * While "Random Skip All Albums" is active, walks backward through the tracks it has
+     * actually played (via [shuffleHistory]) so Previous returns to what was just heard,
+     * rather than picking another random one; a no-op once there's nothing earlier to go
+     * back to. Otherwise defers to the controller's own queue navigation as normal.
+     */
+    fun skipPrevious() {
+        if (_uiState.value.isShuffleAllActive) {
+            if (shuffleHistoryPos > 0) {
+                shuffleHistoryPos--
+                val (track, folderUriStr) = shuffleHistory[shuffleHistoryPos]
+                playSingleTrack(track, folderUriStr)
+            }
+        } else {
+            controller?.seekToPreviousMediaItem()
+        }
+    }
+
     fun seekTo(positionMs: Long) = controller?.seekTo(positionMs)
 
     /** Jumps straight to a specific track already in the playable queue. */

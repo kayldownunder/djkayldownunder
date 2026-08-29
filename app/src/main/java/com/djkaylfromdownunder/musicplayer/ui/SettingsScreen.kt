@@ -34,6 +34,7 @@ fun SettingsScreen(
     settingsLayoutViewModel: SettingsLayoutViewModel,
     dockPreferencesViewModel: DockPreferencesViewModel,
     buttonColorViewModel: ButtonColorViewModel,
+    audioNormalizationViewModel: AudioNormalizationViewModel,
     onNavigateToSkipReview: () -> Unit
 ) {
     val rootUri by libraryViewModel.rootUri.collectAsState()
@@ -110,7 +111,8 @@ fun SettingsScreen(
             }
         }
 
-        itemsIndexed(blocks, key = { _, block -> block.id }) { _, block ->
+        val displayBlocks = dragState.displayOrder(blocks) { it.id }
+        itemsIndexed(displayBlocks, key = { _, block -> block.id }) { _, block ->
             val isDragging = dragState.isDragging(block.id)
             Box(
                 modifier = Modifier
@@ -130,6 +132,7 @@ fun SettingsScreen(
                     isConsolidatingArtwork = isConsolidatingArtwork,
                     consolidateResult = consolidateResult,
                     dragEnabled = !dragState.isAnyDragging,
+                    audioNormalizationViewModel = audioNormalizationViewModel,
                     onFetchAllMetadata = ::fetchAllMetadata,
                     onConsolidateArtwork = ::consolidateArtwork,
                     onNavigateToSkipReview = onNavigateToSkipReview,
@@ -203,6 +206,7 @@ private fun SettingsBlockButton(
     isConsolidatingArtwork: Boolean,
     consolidateResult: String?,
     dragEnabled: Boolean,
+    audioNormalizationViewModel: AudioNormalizationViewModel,
     onFetchAllMetadata: () -> Unit,
     onConsolidateArtwork: () -> Unit,
     onNavigateToSkipReview: () -> Unit,
@@ -291,5 +295,16 @@ private fun SettingsBlockButton(
             label = block.label,
             enabled = dragEnabled
         )
+        "audio_normalization" -> {
+            val isEnabled by audioNormalizationViewModel.isEnabled.collectAsState()
+            Button(
+                onClick = { audioNormalizationViewModel.toggle() },
+                enabled = dragEnabled,
+                colors = shortcutButtonColors(buttonColorViewModel),
+                modifier = fillWidth
+            ) {
+                Text(if (isEnabled) "${block.label}: On" else "${block.label}: Off")
+            }
+        }
     }
 }

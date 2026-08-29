@@ -25,6 +25,7 @@ fun PlayListsScreen(
     customPlaylistViewModel: CustomPlaylistViewModel,
     viewPreferencesViewModel: ViewPreferencesViewModel,
     buttonColorViewModel: ButtonColorViewModel,
+    isShuffleAllActive: Boolean,
     onPlaylistClick: (Playlist) -> Unit,
     onRandomSkipAllAlbums: (List<Playlist>) -> Unit
 ) {
@@ -74,6 +75,7 @@ fun PlayListsScreen(
             )
             if (folderPlaylists.isNotEmpty()) {
                 RandomSkipAllShortcut(
+                    isActive = isShuffleAllActive,
                     onClick = { onRandomSkipAllAlbums(folderPlaylists) },
                     buttonColorViewModel = buttonColorViewModel
                 )
