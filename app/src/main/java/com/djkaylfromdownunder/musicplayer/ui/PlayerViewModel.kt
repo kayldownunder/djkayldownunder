@@ -329,7 +329,10 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         shuffleAllPool = playlists
         val activating = !_uiState.value.isShuffleAllActive
         _uiState.value = _uiState.value.copy(isShuffleAllActive = activating)
-        if (!activating) return
+        if (!activating) {
+            restoreQueueForCurrentTrack()
+            return
+        }
 
         val current = _uiState.value.currentTrack
         if (current != null) {
@@ -340,6 +343,55 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             shuffleHistoryPos = -1
             playRandomTrackFromPool(pushHistory = true)
         }
+    }
+
+    /**
+     * Turning "Random Skip All Albums" off needs to undo what [playSingleTrack] did to the
+     * controller/state while it was active: every track change while that mode is on loads
+     * the controller with just that one track (see playSingleTrack), collapsing the real
+     * queue/fullTrackList down to a single item. Left alone, that breaks end-of-track
+     * auto-advance, Next/Previous (nothing else queued to seek to), and the swipe-up
+     * playlist sheet (only shows the one track) for the rest of playback. Reloads the actual
+     * playlist the current track belongs to (from [shuffleAllPool]) around the current
+     * position so normal queue navigation resumes. No-op if the current track wasn't loaded
+     * via shuffle-all in the first place (currentPlaylist already set - queue is intact).
+     */
+    private fun restoreQueueForCurrentTrack() {
+        if (currentPlaylist != null) return
+        val current = _uiState.value.currentTrack ?: return
+        val folderUriStr = currentFolderUri ?: return
+        val playlist = shuffleAllPool.find { it.folderUri.toString() == folderUriStr } ?: return
+
+        currentPlaylist = playlist
+        val effectiveTracks = playlist.tracks.filterNot {
+            skipListRepository.isSkipped(folderUriStr, it.uri.toString())
+        }
+        currentQueue = effectiveTracks
+        val startIndex = effectiveTracks.indexOfFirst { it.uri == current.uri }.coerceAtLeast(0)
+        val startPositionMs = controller?.currentPosition?.coerceAtLeast(0) ?: 0L
+
+        val mediaItems = effectiveTracks.map { track ->
+            MediaItem.Builder()
+                .setUri(track.uri)
+                .setMediaId(folderUriStr)
+                .setMediaMetadata(
+                    MediaMetadata.Builder()
+                        .setTitle(track.displayName)
+                        .build()
+                )
+                .build()
+        }
+        controller?.apply {
+            setMediaItems(mediaItems, startIndex, startPositionMs)
+            prepare()
+            play()
+        }
+        _uiState.value = _uiState.value.copy(
+            queue = effectiveTracks,
+            fullTrackList = playlist.tracks,
+            currentIndex = startIndex,
+            currentPlaylistFolderUri = folderUriStr
+        )
     }
 
     /**

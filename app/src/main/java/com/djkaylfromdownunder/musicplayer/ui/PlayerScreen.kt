@@ -3,6 +3,9 @@ package com.djkaylfromdownunder.musicplayer.ui
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
@@ -142,6 +145,16 @@ fun PlayerScreen(
             }
         }
     }
+
+    // The nested scroll connection above only fires when the track list itself is
+    // dragged, since NestedScrollConnection.onPreScroll is only invoked by descendants
+    // that are themselves scrollable - a plain Box/Column has nothing to dispatch. This
+    // gives the header area (artwork, skip checkbox row, title/album text, divider) its
+    // own scrollable node with nothing of its own to scroll, purely so dragging it feeds
+    // the exact same nestedScrollConnection.onPreScroll above (same sign convention
+    // already proven correct by list-dragging), rather than duplicating that math with a
+    // separate draggable and risking a mismatched delta sign.
+    val headerScrollState = rememberScrollableState { delta -> delta }
 
     // Switching tracks (e.g. via Next/Previous or tapping a queue row) re-expands the
     // artwork, so it doesn't stay collapsed from browsing the list on the previous track.
@@ -296,93 +309,103 @@ fun PlayerScreen(
                 .weight(1f)
                 .nestedScroll(nestedScrollConnection)
         ) {
-            // Top half: collapsible album artwork. Shrinks to nothing and fades out as
-            // the track list is scrolled.
-            if (artHeightPx > 0.5f) {
-                val artHeightDp = with(density) { artHeightPx.toDp() }
-                val artFraction = (artHeightPx / maxArtHeightPx).coerceIn(0f, 1f)
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(artHeightDp)
-                        .padding(horizontal = 24.dp, vertical = 8.dp)
-                        .graphicsLayer { alpha = artFraction },
-                    contentAlignment = Alignment.Center
-                ) {
+            // Header area (artwork, skip checkbox, title/album, divider): wrapped in its
+            // own vertical drag detector so dragging anywhere here - not just on the
+            // track list below - collapses/expands the artwork the same way.
+            Column(
+                modifier = Modifier.scrollable(
+                    state = headerScrollState,
+                    orientation = Orientation.Vertical
+                )
+            ) {
+                // Top half: collapsible album artwork. Shrinks to nothing and fades out as
+                // the track list is scrolled.
+                if (artHeightPx > 0.5f) {
+                    val artHeightDp = with(density) { artHeightPx.toDp() }
+                    val artFraction = (artHeightPx / maxArtHeightPx).coerceIn(0f, 1f)
                     Box(
                         modifier = Modifier
-                            .fillMaxHeight()
-                            .aspectRatio(1f, matchHeightConstraintsFirst = true)
-                            .clip(RoundedCornerShape(16.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
+                            .fillMaxWidth()
+                            .height(artHeightDp)
+                            .padding(horizontal = 24.dp, vertical = 8.dp)
+                            .graphicsLayer { alpha = artFraction },
+                        contentAlignment = Alignment.Center
                     ) {
-                        TrackArtwork(
-                            track = state.currentTrack,
-                            metadataViewModel = metadataViewModel,
-                            modifier = Modifier.fillMaxSize()
+                        Box(
+                            modifier = Modifier
+                                .fillMaxHeight()
+                                .aspectRatio(1f, matchHeightConstraintsFirst = true)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                        ) {
+                            TrackArtwork(
+                                track = state.currentTrack,
+                                metadataViewModel = metadataViewModel,
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                }
+
+                // "Skip this song next time": tick to always skip this track in this
+                // playlist from now on. Sits directly under the album artwork.
+                if (folderUri != null && trackUri != null) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = isSkipMarked,
+                            onCheckedChange = { checked ->
+                                isSkipMarked = checked
+                                skipListViewModel.setSkipped(folderUri, trackUri, checked)
+                                skipRefreshTick++
+                            }
+                        )
+                        Text(
+                            "Skip this song next time",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
-            }
 
-            // "Skip this song next time": tick to always skip this track in this
-            // playlist from now on. Sits directly under the album artwork.
-            if (folderUri != null && trackUri != null) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                    verticalAlignment = Alignment.CenterVertically
+                // Title/album - stays with the artwork above the track list. The actual
+                // transport controls and progress bar live in the slim bar pinned to the
+                // bottom of the whole screen (see CompactPlaybackBar below).
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp, vertical = 8.dp)
                 ) {
-                    Checkbox(
-                        checked = isSkipMarked,
-                        onCheckedChange = { checked ->
-                            isSkipMarked = checked
-                            skipListViewModel.setSkipped(folderUri, trackUri, checked)
-                            skipRefreshTick++
-                        }
-                    )
-                    Text(
-                        "Skip this song next time",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
+                    val currentMetadata = state.currentTrack?.let { metadataViewModel.metadataFor(it.uri.toString()) }
+                    val songTitle = currentMetadata?.title?.takeIf { it.isNotBlank() }
+                        ?: state.currentTrack?.displayName
+                        ?: "Nothing playing"
+                    val albumName = currentMetadata?.album?.takeIf { it.isNotBlank() }
 
-            // Title/album - stays with the artwork above the track list. The actual
-            // transport controls and progress bar live in the slim bar pinned to the
-            // bottom of the whole screen (see CompactPlaybackBar below).
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 24.dp, vertical = 8.dp)
-            ) {
-                val currentMetadata = state.currentTrack?.let { metadataViewModel.metadataFor(it.uri.toString()) }
-                val songTitle = currentMetadata?.title?.takeIf { it.isNotBlank() }
-                    ?: state.currentTrack?.displayName
-                    ?: "Nothing playing"
-                val albumName = currentMetadata?.album?.takeIf { it.isNotBlank() }
-
-                Text(
-                    text = songTitle,
-                    style = MaterialTheme.typography.titleLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                if (albumName != null) {
                     Text(
-                        text = albumName,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        text = songTitle,
+                        style = MaterialTheme.typography.titleLarge,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
                     )
+                    if (albumName != null) {
+                        Text(
+                            text = albumName,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
                 }
-            }
 
-            HorizontalDivider(
-                modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
-                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
-            )
+                HorizontalDivider(
+                    modifier = Modifier.padding(horizontal = 24.dp, vertical = 8.dp),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.15f)
+                )
+            }
 
             // Track list: every track in the folder, with artwork, bold title, and
             // artist name. Skipped tracks show with a line through them; tapping one
