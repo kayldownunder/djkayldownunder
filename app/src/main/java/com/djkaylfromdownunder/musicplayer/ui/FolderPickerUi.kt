@@ -23,7 +23,8 @@ fun ChooseMusicFolderButton(
     label: String = "Choose Music Folder",
     icon: ImageVector = Icons.Default.FolderOpen,
     enabled: Boolean = true,
-    buttonColorViewModel: ButtonColorViewModel? = null
+    buttonColorViewModel: ButtonColorViewModel? = null,
+    onLongClick: (() -> Unit)? = null
 ) {
     val launcher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.OpenDocumentTree()
@@ -39,6 +40,7 @@ fun ChooseMusicFolderButton(
             label = label,
             enabled = enabled,
             onClick = { launcher.launch(null) },
+            onLongClick = onLongClick,
             modifier = modifier
         )
     } else {

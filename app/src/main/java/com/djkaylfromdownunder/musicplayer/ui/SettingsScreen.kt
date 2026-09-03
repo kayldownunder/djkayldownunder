@@ -1,7 +1,6 @@
 package com.djkaylfromdownunder.musicplayer.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -128,16 +127,7 @@ fun SettingsScreen(
                 }
 
                 itemsIndexed(blocks, key = { _, block -> block.id }) { index, block ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .combinedClickable(
-                                onClick = {},
-                                onLongClick = {
-                                    expandedBlockId = if (expandedBlockId == block.id) null else block.id
-                                }
-                            )
-                    ) {
+                    Column(modifier = Modifier.fillMaxWidth()) {
                         SettingsBlockButton(
                             block = block,
                             libraryViewModel = libraryViewModel,
@@ -153,7 +143,10 @@ fun SettingsScreen(
                             onConsolidateArtwork = ::consolidateArtwork,
                             onNavigateToSkipReview = onNavigateToSkipReview,
                             onShowDockVisibility = onNavigateToDockSettings,
-                            onShowFontSettings = { showFontDialog = true }
+                            onShowFontSettings = { showFontDialog = true },
+                            onLongClick = {
+                                expandedBlockId = if (expandedBlockId == block.id) null else block.id
+                            }
                         )
                         if (expandedBlockId == block.id) {
                             Row(
@@ -253,7 +246,8 @@ private fun SettingsBlockButton(
     onConsolidateArtwork: () -> Unit,
     onNavigateToSkipReview: () -> Unit,
     onShowDockVisibility: () -> Unit,
-    onShowFontSettings: () -> Unit
+    onShowFontSettings: () -> Unit,
+    onLongClick: () -> Unit
 ) {
     val fillWidth = Modifier.fillMaxWidth()
     when (block.id) {
@@ -261,6 +255,7 @@ private fun SettingsBlockButton(
             icon = block.icon,
             label = block.label,
             onClick = onShowFontSettings,
+            onLongClick = onLongClick,
             modifier = fillWidth
         )
         "music_library" -> ChooseMusicFolderButton(
@@ -268,14 +263,16 @@ private fun SettingsBlockButton(
             modifier = fillWidth,
             label = block.label,
             icon = block.icon,
-            buttonColorViewModel = buttonColorViewModel
+            buttonColorViewModel = buttonColorViewModel,
+            onLongClick = onLongClick
         )
         "metadata" -> Column(modifier = fillWidth) {
             SettingsShortcutRow(
                 icon = block.icon,
                 label = block.label,
                 enabled = rootUri != null && !metadataRunning && !isScanningLibrary,
-                onClick = onFetchAllMetadata
+                onClick = onFetchAllMetadata,
+                onLongClick = onLongClick
             )
             if (isScanningLibrary) {
                 Text(
@@ -291,7 +288,8 @@ private fun SettingsBlockButton(
                 icon = block.icon,
                 label = if (isConsolidatingArtwork) "Moving images…" else block.label,
                 enabled = rootUri != null && !isConsolidatingArtwork,
-                onClick = onConsolidateArtwork
+                onClick = onConsolidateArtwork,
+                onLongClick = onLongClick
             )
             if (consolidateResult != null) {
                 Text(
@@ -307,32 +305,37 @@ private fun SettingsBlockButton(
             label = block.label,
             icon = block.icon,
             themeViewModel = themeViewModel,
-            modifier = fillWidth
+            modifier = fillWidth,
+            onLongClick = onLongClick
         )
         "settings_background" -> BackgroundShortcutButton(
             target = BackgroundTarget.SETTINGS,
             label = block.label,
             icon = block.icon,
             themeViewModel = themeViewModel,
-            modifier = fillWidth
+            modifier = fillWidth,
+            onLongClick = onLongClick
         )
         "dock_visibility" -> SettingsShortcutRow(
             icon = block.icon,
             label = block.label,
             onClick = onShowDockVisibility,
+            onLongClick = onLongClick,
             modifier = fillWidth
         )
         "skip_review" -> SettingsShortcutRow(
             icon = block.icon,
             label = block.label,
             onClick = onNavigateToSkipReview,
+            onLongClick = onLongClick,
             modifier = fillWidth
         )
         "shortcut_button_color" -> ShortcutButtonColorPicker(
             buttonColorViewModel = buttonColorViewModel,
             modifier = fillWidth,
             label = block.label,
-            icon = block.icon
+            icon = block.icon,
+            onLongClick = onLongClick
         )
         "audio_normalization" -> {
             val isEnabled by audioNormalizationViewModel.isEnabled.collectAsState()
@@ -340,6 +343,7 @@ private fun SettingsBlockButton(
                 icon = block.icon,
                 label = if (isEnabled) "${block.label}: On" else "${block.label}: Off",
                 onClick = { audioNormalizationViewModel.toggle() },
+                onLongClick = onLongClick,
                 modifier = fillWidth
             )
         }
@@ -350,18 +354,25 @@ private fun SettingsBlockButton(
  * A single Settings shortcut: icon on the left, label on one line next to it, transparent
  * background rather than a colored button - every block on the Settings screen renders as
  * one of these (or wraps one, for blocks with an extra status line underneath).
+ *
+ * [onLongClick] (reorder-mode toggle, when supplied by the Settings screen) shares this same
+ * [combinedClickable] with [onClick] rather than being layered on via a wrapping modifier -
+ * two separate clickables stacked on the same bounds would race for the gesture, and the
+ * inner one (this row's own tap) would always win, silently swallowing every long press.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SettingsShortcutRow(
     icon: ImageVector,
     label: String,
     enabled: Boolean = true,
     onClick: () -> Unit,
+    onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     Row(
         modifier = modifier
-            .clickable(enabled = enabled, onClick = onClick)
+            .combinedClickable(enabled = enabled, onClick = onClick, onLongClick = onLongClick)
             .padding(vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {

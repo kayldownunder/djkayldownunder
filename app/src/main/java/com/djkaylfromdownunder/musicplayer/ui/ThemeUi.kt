@@ -136,7 +136,8 @@ fun BackgroundShortcutButton(
     icon: ImageVector = Icons.Default.Wallpaper,
     themeViewModel: ThemeViewModel,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    onLongClick: (() -> Unit)? = null
 ) {
     var showPicker by remember { mutableStateOf(false) }
 
@@ -145,6 +146,7 @@ fun BackgroundShortcutButton(
         label = label,
         enabled = enabled,
         onClick = { showPicker = true },
+        onLongClick = onLongClick,
         modifier = modifier
     )
 

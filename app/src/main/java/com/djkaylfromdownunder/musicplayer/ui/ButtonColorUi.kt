@@ -64,7 +64,8 @@ fun ShortcutButtonColorPicker(
     modifier: Modifier = Modifier,
     label: String = "Shortcut Button Color Selection",
     icon: ImageVector = Icons.Default.Palette,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    onLongClick: (() -> Unit)? = null
 ) {
     var showDialog by remember { mutableStateOf(false) }
 
@@ -73,6 +74,7 @@ fun ShortcutButtonColorPicker(
         label = label,
         enabled = enabled,
         onClick = { showDialog = true },
+        onLongClick = onLongClick,
         modifier = modifier
     )
 
