@@ -22,12 +22,24 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.djkaylfromdownunder.musicplayer.data.Playlist
 import com.djkaylfromdownunder.musicplayer.ui.theme.SurfaceCard
 
 val FavoriteRed = Color(0xFFE53935)
+
+/**
+ * Shared text style for every name/subtitle text field on the Library-style screens
+ * (Library, Play Lists, Favorites) - one consistent size/weight everywhere (name and track
+ * count/progress line alike) rather than each card/row picking its own typography step, so
+ * the user's Playlist Text size setting (see FontPrefs.albumTextSizeSp) scales all of it
+ * uniformly. Callers still set their own `color` per field to keep secondary text visually
+ * muted without reintroducing a size/weight difference.
+ */
+val LibraryItemTextStyle: TextStyle
+    @Composable get() = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold)
 
 /**
  * Square cover-art card used in grid layouts - shared by Library, Play Lists, and Favorites.
@@ -162,12 +174,11 @@ fun PlaylistGridCard(
             }
         }
         Spacer(modifier = Modifier.height(if (compact) 4.dp else 8.dp))
-        Text(
-            text = playlist.name,
-            style = if (compact) MaterialTheme.typography.bodyMedium.copy(fontWeight = FontWeight.SemiBold)
-                    else MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-            maxLines = 1
-        )
+        // Name and subtitle share one text field style (LibraryItemTextStyle, see below)
+        // regardless of compact/regular grid density - one consistent size/weight across
+        // every text field on the Library page, sized by the user's Playlist Text setting.
+        // Only the color differs, to keep the count/progress line visually secondary.
+        Text(text = playlist.name, style = LibraryItemTextStyle, maxLines = 1)
         // Dropped in compact/Small mode (unless actively fetching) to keep the dense
         // 3-per-row grid's tiles short, so more albums fit on screen at once.
         if (isFetchingThis || !compact) {
@@ -181,7 +192,7 @@ fun PlaylistGridCard(
                 } else {
                     "${playlist.trackCount} tracks"
                 },
-                style = MaterialTheme.typography.bodySmall,
+                style = LibraryItemTextStyle,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -239,14 +250,10 @@ fun PlaylistRow(
         }
         Spacer(modifier = Modifier.width(12.dp))
         Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = playlist.name,
-                style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
-                maxLines = 1
-            )
+            Text(text = playlist.name, style = LibraryItemTextStyle, maxLines = 1)
             Text(
                 text = "${playlist.trackCount} tracks",
-                style = MaterialTheme.typography.bodySmall,
+                style = LibraryItemTextStyle,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }

@@ -21,8 +21,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import com.djkaylfromdownunder.musicplayer.data.MAX_TEXT_SIZE_SP
+import com.djkaylfromdownunder.musicplayer.data.MIN_TEXT_SIZE_SP
 import com.djkaylfromdownunder.musicplayer.ui.theme.AVAILABLE_FONT_FAMILIES
 import com.djkaylfromdownunder.musicplayer.ui.theme.fontFamilyFor
+import kotlin.math.roundToInt
 
 /** Which of the two independent font configurations [FontSettingsDialog] is showing. */
 private enum class FontSection { PLAYLIST, SETTINGS }
@@ -113,8 +116,8 @@ fun FontSettingsDialog(
                         FontSectionControls(
                             familyName = draft.albumFontFamilyName,
                             onFamilyChange = { draft = draft.copy(albumFontFamilyName = it) },
-                            sizeScale = draft.albumTextSizeScale,
-                            onSizeChange = { draft = draft.copy(albumTextSizeScale = it) },
+                            sizeSp = draft.albumTextSizeSp,
+                            onSizeChange = { draft = draft.copy(albumTextSizeSp = it) },
                             colorArgb = draft.albumFontColorArgb,
                             onColorChange = { draft = draft.copy(albumFontColorArgb = it) }
                         )
@@ -125,8 +128,8 @@ fun FontSettingsDialog(
                         FontSectionControls(
                             familyName = draft.settingsFontFamilyName,
                             onFamilyChange = { draft = draft.copy(settingsFontFamilyName = it) },
-                            sizeScale = draft.settingsTextSizeScale,
-                            onSizeChange = { draft = draft.copy(settingsTextSizeScale = it) },
+                            sizeSp = draft.settingsTextSizeSp,
+                            onSizeChange = { draft = draft.copy(settingsTextSizeSp = it) },
                             colorArgb = draft.settingsFontColorArgb,
                             onColorChange = { draft = draft.copy(settingsFontColorArgb = it) }
                         )
@@ -146,7 +149,7 @@ fun FontSettingsDialog(
 private fun FontSectionControls(
     familyName: String,
     onFamilyChange: (String) -> Unit,
-    sizeScale: Float,
+    sizeSp: Float,
     onSizeChange: (Float) -> Unit,
     colorArgb: Int,
     onColorChange: (Int) -> Unit
@@ -164,7 +167,7 @@ private fun FontSectionControls(
             Text(
                 text = "The quick brown fox jumps",
                 fontFamily = fontFamilyFor(familyName),
-                fontSize = (16 * sizeScale).sp,
+                fontSize = sizeSp.sp,
                 color = previewColor
             )
         }
@@ -178,10 +181,15 @@ private fun FontSectionControls(
         Spacer(modifier = Modifier.height(20.dp))
 
         Text(
-            "Text Size (${"%.0f".format(sizeScale * 100)}%)",
+            "Text Size (${"%.0f".format(sizeSp)}sp)",
             style = MaterialTheme.typography.titleMedium
         )
-        Slider(value = sizeScale, onValueChange = onSizeChange, valueRange = 0.75f..1.5f)
+        Slider(
+            value = sizeSp,
+            onValueChange = { onSizeChange(it.roundToInt().toFloat()) },
+            valueRange = MIN_TEXT_SIZE_SP..MAX_TEXT_SIZE_SP,
+            steps = (MAX_TEXT_SIZE_SP - MIN_TEXT_SIZE_SP).toInt() - 1
+        )
 
         Spacer(modifier = Modifier.height(12.dp))
 

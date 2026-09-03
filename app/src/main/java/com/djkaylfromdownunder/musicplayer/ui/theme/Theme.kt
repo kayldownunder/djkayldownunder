@@ -24,21 +24,25 @@ private val AppDarkColorScheme = darkColorScheme(
 
 /**
  * Applies a Font Settings choice on top of [AppTypography]'s base styles: swaps in
- * [familyName], scales every size by [sizeScale], and - only when a color override is
- * actually set ([colorArgb] != -1) - recolors text that doesn't already specify its own
- * explicit color (Text() calls that pass `color = ...` still win over this, e.g. error text
- * stays red). Takes plain primitives rather than a [FontPrefs] directly because [FontPrefs]
- * carries two fully independent (family, size, color) triples - one for the app at large
- * ("Playlist Text") and one for just the Settings screen ("Settings Text") - and this same
- * builder is used for both.
+ * [familyName], scales every size proportionally so that [AppTypography.bodyLarge]'s own
+ * size lands exactly on [sizeSp], and - only when a color override is actually set
+ * ([colorArgb] != -1) - recolors text that doesn't already specify its own explicit color
+ * (Text() calls that pass `color = ...` still win over this, e.g. error text stays red).
+ * Scaling around bodyLarge (rather than applying [sizeSp] as a literal size to every style)
+ * keeps headlines bigger than body text at every setting, the same relative hierarchy
+ * [AppTypography] already defines. Takes plain primitives rather than a [FontPrefs] directly
+ * because [FontPrefs] carries two fully independent (family, size, color) triples - one for
+ * the app at large ("Playlist Text") and one for just the Settings screen ("Settings Text")
+ * - and this same builder is used for both.
  */
-private fun buildTypography(familyName: String, sizeScale: Float, colorArgb: Int): Typography {
+private fun buildTypography(familyName: String, sizeSp: Float, colorArgb: Int): Typography {
     val family = fontFamilyFor(familyName)
     val overrideColor = if (colorArgb != -1) Color(colorArgb) else null
+    val scale = sizeSp / AppTypography.bodyLarge.fontSize.value
 
     fun TextStyle.themed(): TextStyle = copy(
         fontFamily = family,
-        fontSize = (fontSize.value * sizeScale).sp,
+        fontSize = (fontSize.value * scale).sp,
         color = overrideColor ?: color
     )
 
@@ -60,7 +64,7 @@ fun DJKaylTheme(fontPrefs: FontPrefs = FontPrefs(), content: @Composable () -> U
         colorScheme = AppDarkColorScheme,
         typography = buildTypography(
             fontPrefs.albumFontFamilyName,
-            fontPrefs.albumTextSizeScale,
+            fontPrefs.albumTextSizeSp,
             fontPrefs.albumFontColorArgb
         ),
         content = content
@@ -78,7 +82,7 @@ fun SettingsTypography(fontPrefs: FontPrefs, content: @Composable () -> Unit) {
     MaterialTheme(
         typography = buildTypography(
             fontPrefs.settingsFontFamilyName,
-            fontPrefs.settingsTextSizeScale,
+            fontPrefs.settingsTextSizeSp,
             fontPrefs.settingsFontColorArgb
         ),
         content = content

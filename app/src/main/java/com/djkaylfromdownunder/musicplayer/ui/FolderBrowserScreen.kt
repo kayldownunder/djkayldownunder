@@ -22,7 +22,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -400,11 +399,12 @@ private fun SubFolderGridCard(
         Spacer(modifier = Modifier.height(if (compact) 4.dp else 8.dp))
         Text(
             text = item.name,
-            // Two typography steps smaller than before (bodyMedium/bodyLarge), and wraps
-            // to a second line instead of ellipsizing, since a folder card's name is often
-            // the only way to tell two similarly-thumbnailed folders apart.
-            style = if (compact) MaterialTheme.typography.labelLarge.copy(fontWeight = FontWeight.SemiBold)
-                    else MaterialTheme.typography.bodySmall.copy(fontWeight = FontWeight.SemiBold),
+            // LibraryItemTextStyle regardless of compact/regular grid density - the same
+            // style every other name/count text field on the Library page uses, sized by
+            // the user's Playlist Text setting. Wraps to a second line instead of
+            // ellipsizing, since a folder card's name is often the only way to tell two
+            // similarly-thumbnailed folders apart.
+            style = LibraryItemTextStyle,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis
         )
@@ -510,7 +510,7 @@ private fun SubFolderListRow(
         Spacer(modifier = Modifier.width(12.dp))
         Text(
             text = item.name,
-            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.SemiBold),
+            style = LibraryItemTextStyle,
             maxLines = 1,
             modifier = Modifier.weight(1f)
         )

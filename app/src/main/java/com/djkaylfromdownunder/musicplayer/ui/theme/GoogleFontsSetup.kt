@@ -19,37 +19,23 @@ private val googleFontsProvider = GoogleFont.Provider(
  *
  * Grouped roughly by feel so the dropdown reads as more than an alphabetical dump: everyday
  * sans/serif text faces first, then a much wider set of bold/decorative display faces (script,
- * slab, condensed, monospace, etc.) for headline-style theming.
+ * slab, condensed, monospace, etc.) for headline-style theming. The everyday-text group is
+ * deliberately short - most humanist sans faces at this size read as near-identical, so it
+ * keeps only ones with a genuinely distinct look (geometric, condensed, elegant serif, slab)
+ * rather than a dozen near-duplicates of each other.
  */
 val AVAILABLE_FONT_FAMILIES: List<String> = listOf(
     "System Default",
     // Everyday text faces
     "Roboto",
-    "Open Sans",
-    "Lato",
     "Montserrat",
     "Oswald",
     "Poppins",
-    "Noto Sans",
     "Raleway",
-    "Nunito",
-    "Merriweather",
-    "PT Sans",
-    "Playfair Display",
-    "Ubuntu",
-    "Inter",
-    "Source Sans Pro",
-    "Work Sans",
-    "DM Sans",
-    "Barlow",
     "Rubik",
-    "Karla",
-    "Mulish",
+    "Merriweather",
     "Libre Baskerville",
-    "EB Garamond",
-    "Vollkorn",
-    "Crimson Text",
-    "Cormorant Garamond",
+    "Playfair Display",
     "Zilla Slab",
     // Bold / decorative display faces
     "Bebas Neue",
