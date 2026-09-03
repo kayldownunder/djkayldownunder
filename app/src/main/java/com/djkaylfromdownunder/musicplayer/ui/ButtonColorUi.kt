@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
@@ -17,6 +18,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Shuffle
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -25,6 +27,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextAlign
@@ -50,37 +53,28 @@ class ButtonColorViewModel(application: Application) : AndroidViewModel(applicat
 }
 
 /**
- * Shared fill/content colors for every "shortcut" button across the app, driven by the
- * user's chosen color (see ButtonColorViewModel) - white content color throughout so text
- * stays legible regardless of which color is picked.
- */
-@Composable
-fun shortcutButtonColors(buttonColorViewModel: ButtonColorViewModel): ButtonColors {
-    val color by buttonColorViewModel.color.collectAsState()
-    return ButtonDefaults.buttonColors(containerColor = color, contentColor = Color.White)
-}
-
-/**
- * Settings entry point ("Shortcut Button Color Selection"): opens a color palette:
- * selecting a swatch globally recolors every shortcut button across the app.
+ * Settings entry point ("Shortcut Button Color Selection"): opens a color palette. Selecting
+ * a swatch recolors the "Random skip all albums" shortcut (see [RandomSkipAllShortcut]) on
+ * the Library, Play Lists, and Now Playing screens - the Settings shortcuts themselves are
+ * plain icon+label rows and don't use this color.
  */
 @Composable
 fun ShortcutButtonColorPicker(
     buttonColorViewModel: ButtonColorViewModel,
     modifier: Modifier = Modifier,
     label: String = "Shortcut Button Color Selection",
+    icon: ImageVector = Icons.Default.Palette,
     enabled: Boolean = true
 ) {
     var showDialog by remember { mutableStateOf(false) }
 
-    Button(
-        onClick = { showDialog = true },
+    SettingsShortcutRow(
+        icon = icon,
+        label = label,
         enabled = enabled,
-        colors = shortcutButtonColors(buttonColorViewModel),
+        onClick = { showDialog = true },
         modifier = modifier
-    ) {
-        Text(label)
-    }
+    )
 
     if (showDialog) {
         val current by buttonColorViewModel.color.collectAsState()
@@ -127,7 +121,7 @@ fun ShortcutButtonColorPicker(
 /**
  * Playback shortcut shown top-right on the Library, Playlist, and Now Playing screens:
  * shuffles every track from every album into one combined queue and starts playing it.
- * Rendered as a small round colored button (see shortcutButtonColors) with its label
+ * Rendered as a small round colored button (colored via ButtonColorViewModel) with its label
  * directly underneath rather than inside the button, so the label has room without
  * widening the button itself.
  *

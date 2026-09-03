@@ -31,7 +31,30 @@ import com.djkaylfromdownunder.musicplayer.data.Playlist
 import com.djkaylfromdownunder.musicplayer.data.PlaylistViewMode
 import com.djkaylfromdownunder.musicplayer.ui.theme.SurfaceCard
 import android.net.Uri
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asAndroidBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import android.util.LruCache
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+/**
+ * Small in-memory cache of decoded fallback-cover bitmaps (see [FolderBrowseItem.SubFolder]'s
+ * borrowed-from-first-child cover, MusicFolderRepository.findFirstChildCoverArt), keyed by
+ * folder URI - mirrors TrackArtwork's EmbeddedArtCache so re-decoding on every recomposition
+ * or scroll doesn't jank the list/grid.
+ */
+private object FolderFallbackArtCache {
+    private val cache = object : LruCache<String, ImageBitmap>(8 * 1024 * 1024) {
+        override fun sizeOf(key: String, value: ImageBitmap): Int = value.asAndroidBitmap().byteCount
+    }
+
+    fun get(key: String): ImageBitmap? = cache.get(key)
+    fun put(key: String, bitmap: ImageBitmap) {
+        cache.put(key, bitmap)
+    }
+}
 
 @Composable
 fun FolderBrowserScreen(
@@ -238,9 +261,28 @@ private fun SubFolderGridCard(
     // straight inside "AC/DC" alongside its Album subfolders) overrides the generated
     // collage automatically - no manual "set cover" step needed.
     var customCoverUri by remember(item.uri) { mutableStateOf<Uri?>(null) }
+    // Last-resort cover, borrowed from the first subfolder's own art, for a folder that has
+    // neither a custom cover nor a generated collage - most commonly one with only nested
+    // subfolders and no songs of its own, which never gets a collage auto-generated since
+    // there's no "fetch metadata" shortcut to trigger it (see hasDirectTracks below).
+    var fallbackBitmap by remember(item.uri) {
+        mutableStateOf<ImageBitmap?>(FolderFallbackArtCache.get(item.uri.toString()))
+    }
     LaunchedEffect(item.uri) {
         customCoverUri = libraryViewModel.findFolderCoverImage(item.uri)
         collageUri = libraryViewModel.findCollageThumbnail(item.uri)
+        if (customCoverUri == null && collageUri == null && fallbackBitmap == null) {
+            val key = item.uri.toString()
+            val decoded = withContext(Dispatchers.IO) {
+                libraryViewModel.findFirstChildCoverArt(item.uri)
+                    ?.let { decodeSampledBitmap(it, targetSizePx = 256) }
+                    ?.asImageBitmap()
+            }
+            if (decoded != null) {
+                FolderFallbackArtCache.put(key, decoded)
+                fallbackBitmap = decoded
+            }
+        }
     }
     val scope = rememberCoroutineScope()
     val progressState = metadataViewModel.progress.collectAsState()
@@ -272,6 +314,13 @@ private fun SubFolderGridCard(
             if (cover != null) {
                 coil.compose.AsyncImage(
                     model = cover,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            } else if (fallbackBitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = fallbackBitmap!!,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop
@@ -394,9 +443,26 @@ private fun SubFolderListRow(
     // A custom cover image dropped directly into this folder overrides the generated
     // collage automatically - no manual "set cover" step needed.
     var customCoverUri by remember(item.uri) { mutableStateOf<Uri?>(null) }
+    // Last-resort cover, borrowed from the first subfolder's own art - see the matching
+    // comment in SubFolderGridCard.
+    var fallbackBitmap by remember(item.uri) {
+        mutableStateOf<ImageBitmap?>(FolderFallbackArtCache.get(item.uri.toString()))
+    }
     LaunchedEffect(item.uri) {
         customCoverUri = libraryViewModel.findFolderCoverImage(item.uri)
         collageUri = libraryViewModel.findCollageThumbnail(item.uri)
+        if (customCoverUri == null && collageUri == null && fallbackBitmap == null) {
+            val key = item.uri.toString()
+            val decoded = withContext(Dispatchers.IO) {
+                libraryViewModel.findFirstChildCoverArt(item.uri)
+                    ?.let { decodeSampledBitmap(it, targetSizePx = 128) }
+                    ?.asImageBitmap()
+            }
+            if (decoded != null) {
+                FolderFallbackArtCache.put(key, decoded)
+                fallbackBitmap = decoded
+            }
+        }
     }
     val scope = rememberCoroutineScope()
     val progressState = metadataViewModel.progress.collectAsState()
@@ -426,6 +492,13 @@ private fun SubFolderListRow(
             if (cover != null) {
                 coil.compose.AsyncImage(
                     model = cover,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop
+                )
+            } else if (fallbackBitmap != null) {
+                androidx.compose.foundation.Image(
+                    bitmap = fallbackBitmap!!,
                     contentDescription = null,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop

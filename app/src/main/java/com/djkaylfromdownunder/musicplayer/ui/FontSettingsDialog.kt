@@ -24,11 +24,14 @@ import com.djkaylfromdownunder.musicplayer.ui.theme.AVAILABLE_FONT_FAMILIES
 import com.djkaylfromdownunder.musicplayer.ui.theme.fontFamilyFor
 
 /**
- * "Visual configuration" modal opened from Settings' top-right button - sample text
- * preview plus font family/size/color controls. Edits are kept in local [draft] state and
- * only committed to [FontPreferencesViewModel] when the modal closes (X button, tap
- * outside, or system back all route through [close]) - a lightweight auto-save-on-back so
- * there's no separate Save button to remember to tap.
+ * "Visual configuration" modal opened from Settings' "Fonts" shortcut - sample text preview
+ * plus font family/size/color controls. Text size is split into two independent fields,
+ * [FontPrefs.albumTextSizeScale] ("Album Text Size", used everywhere outside Settings) and
+ * [FontPrefs.settingsTextSizeScale] ("Settings Text Size", used only on the Settings screen
+ * and its dialogs, this one included) - family and color still apply everywhere. Edits are
+ * kept in local [draft] state and only committed to [FontPreferencesViewModel] when the
+ * modal closes (X button, tap outside, or system back all route through [close]) - a
+ * lightweight auto-save-on-back so there's no separate Save button to remember to tap.
  */
 @Composable
 fun FontSettingsDialog(
@@ -70,7 +73,9 @@ fun FontSettingsDialog(
 
                 // Live sample preview - pinned above the scrollable controls below (not
                 // part of that scroll) so it's always in view while adjusting them, not
-                // just before you start scrolling.
+                // just before you start scrolling. Scaled by Album Text Size since that's
+                // what most of the app uses; the Settings Text Size field below has its own
+                // small preview instead, since this box doesn't reflect that scale.
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -87,7 +92,7 @@ fun FontSettingsDialog(
                     Text(
                         text = "The quick brown fox jumps",
                         fontFamily = fontFamilyFor(draft.fontFamilyName),
-                        fontSize = (16 * draft.fontSizeScale).sp,
+                        fontSize = (16 * draft.albumTextSizeScale).sp,
                         color = previewColor
                     )
                 }
@@ -109,13 +114,36 @@ fun FontSettingsDialog(
                     Spacer(modifier = Modifier.height(20.dp))
 
                     Text(
-                        "Font Size (${"%.0f".format(draft.fontSizeScale * 100)}%)",
+                        "Album Text Size (${"%.0f".format(draft.albumTextSizeScale * 100)}%)",
                         style = MaterialTheme.typography.titleMedium
                     )
                     Slider(
-                        value = draft.fontSizeScale,
-                        onValueChange = { draft = draft.copy(fontSizeScale = it) },
+                        value = draft.albumTextSizeScale,
+                        onValueChange = { draft = draft.copy(albumTextSizeScale = it) },
                         valueRange = 0.75f..1.5f
+                    )
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text(
+                        "Settings Text Size (${"%.0f".format(draft.settingsTextSizeScale * 100)}%)",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                    Slider(
+                        value = draft.settingsTextSizeScale,
+                        onValueChange = { draft = draft.copy(settingsTextSizeScale = it) },
+                        valueRange = 0.75f..1.5f
+                    )
+                    val settingsPreviewColor = if (draft.fontColorArgb != -1) {
+                        Color(draft.fontColorArgb)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Text(
+                        text = "The quick brown fox jumps",
+                        fontFamily = fontFamilyFor(draft.fontFamilyName),
+                        fontSize = (14 * draft.settingsTextSizeScale).sp,
+                        color = settingsPreviewColor
                     )
 
                     Spacer(modifier = Modifier.height(12.dp))

@@ -87,7 +87,7 @@ class MusicFolderRepository(private val context: Context) {
 
     private fun collectPlaylistsRecursive(folder: DocumentFile, out: MutableList<Playlist>) {
         val children = folder.listFiles()
-        val subfolders = children.filter { it.isDirectory }
+        val subfolders = children.filter { it.isDirectory && !isHiddenFolderName(it.name) }
         val audioFiles = children.filter { it.isFile && isAudioFile(it) }
 
         if (audioFiles.isNotEmpty()) {
@@ -115,7 +115,7 @@ class MusicFolderRepository(private val context: Context) {
         val children = folder.listFiles()
 
         val subfolderItems = children
-            .filter { it.isDirectory }
+            .filter { it.isDirectory && !isHiddenFolderName(it.name) }
             .mapNotNull { sub ->
                 val subChildren = sub.listFiles()
                 val hasSubfolders = subChildren.any { it.isDirectory }
@@ -196,6 +196,16 @@ class MusicFolderRepository(private val context: Context) {
             file.listFiles().forEach { child -> deleteRecursive(child) }
         }
         return file.delete()
+    }
+
+    /**
+     * True for a folder name that should never show up as an artist/album entry in the
+     * Library, Search, or Skip Review - e.g. a stray "settings" folder some users end up
+     * with alongside their real artist folders in the root music directory, which isn't
+     * music content and just clutters the library.
+     */
+    private fun isHiddenFolderName(name: String?): Boolean {
+        return name != null && HIDDEN_LIBRARY_FOLDER_NAMES.any { it.equals(name, ignoreCase = true) }
     }
 
     private fun isAudioFile(file: DocumentFile): Boolean {
@@ -356,6 +366,35 @@ class MusicFolderRepository(private val context: Context) {
             ?.uri
     }
 
+    /**
+     * Fallback cover art for a branching folder that has no custom cover image and no
+     * generated collage yet (most commonly one with only nested subfolders and no songs
+     * of its own, which never gets an auto-generated collage since there's no "fetch
+     * metadata" shortcut to trigger it - see hasDirectTracks on [FolderBrowseItem.SubFolder]).
+     * Borrows whatever cover the first subfolder (alphabetically) would itself show: that
+     * subfolder's own dropped-in cover image if it has one, else the first embedded track
+     * art found anywhere inside it (recursing through further nested subfolders via
+     * [firstEmbeddedArt] if that first subfolder is itself just more subfolders). Returns
+     * null if there's no subfolder, or nothing usable was found inside it.
+     */
+    suspend fun findFirstChildCoverArt(folderUri: Uri): ByteArray? = withContext(Dispatchers.IO) {
+        val folder = DocumentFile.fromTreeUri(context, folderUri) ?: return@withContext null
+        val firstSubfolder = folder.listFiles()
+            .filter { it.isDirectory }
+            .minByOrNull { it.name?.lowercase() ?: "" } ?: return@withContext null
+
+        val customCover = firstSubfolder.listFiles()
+            .filter { it.isFile && isImageFile(it) }
+            .minByOrNull { it.name?.lowercase() ?: "" }
+        val customCoverBytes = customCover?.let { image ->
+            runCatching {
+                context.contentResolver.openInputStream(image.uri)?.use { it.readBytes() }
+            }.getOrNull()
+        }
+
+        customCoverBytes ?: firstEmbeddedArt(firstSubfolder)
+    }
+
     /** Depth-first search for the first track with embedded art anywhere inside [folder]. */
     private fun firstEmbeddedArt(folder: DocumentFile, depth: Int = 0): ByteArray? {
         if (depth > 6) return null // guard against pathological nesting
@@ -426,6 +465,10 @@ class MusicFolderRepository(private val context: Context) {
 }
 
 private const val COLLAGE_SIZE_PX = 480
+
+// Folder names that never represent real artist/album content and should be filtered out
+// of Library browsing and Search/Skip Review scans wherever they turn up in the tree.
+private val HIDDEN_LIBRARY_FOLDER_NAMES = setOf("settings")
 
 // Must match BackgroundImageRepository's own folder name - kept as a local constant here
 // rather than a cross-file reference, since it's only needed for this one skip check.

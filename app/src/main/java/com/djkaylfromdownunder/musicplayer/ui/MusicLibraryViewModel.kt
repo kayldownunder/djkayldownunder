@@ -125,6 +125,15 @@ class MusicLibraryViewModel(application: Application) : AndroidViewModel(applica
     }
 
     /**
+     * Fallback cover art borrowed from a branching folder's first subfolder, for when
+     * neither a custom cover nor a generated collage exists yet - see
+     * MusicFolderRepository.findFirstChildCoverArt.
+     */
+    suspend fun findFirstChildCoverArt(folderUri: Uri): ByteArray? {
+        return repository.findFirstChildCoverArt(folderUri)
+    }
+
+    /**
      * Permanently deletes a folder (and everything inside it) from device storage, then
      * re-scans the library so Search/Play Lists/Favorites/Skip Review all drop the
      * deleted content immediately. [onComplete] fires once the whole operation is done,

@@ -27,7 +27,7 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
-private const val AUTO_HIDE_DELAY_MS = 4_000L
+private const val AUTO_HIDE_DELAY_MS = 10_000L
 
 // How far up the handle needs to be dragged before it reveals the bar - small enough to
 // feel responsive, large enough that it isn't triggered by finger tremor on a tap.

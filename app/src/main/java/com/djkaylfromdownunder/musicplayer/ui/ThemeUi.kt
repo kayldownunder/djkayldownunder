@@ -13,6 +13,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Wallpaper
 import androidx.lifecycle.AndroidViewModel
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -21,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -123,28 +126,27 @@ fun TargetedBackground(
 }
 
 /**
- * Standalone shortcut button for one background target - no shared section header, so it
- * can be placed independently in the Settings screen's reorderable grid.
+ * Standalone shortcut for one background target - no shared section header, so it can be
+ * placed independently in the Settings screen's reorderable shortcut list.
  */
 @Composable
 fun BackgroundShortcutButton(
     target: BackgroundTarget,
     label: String,
+    icon: ImageVector = Icons.Default.Wallpaper,
     themeViewModel: ThemeViewModel,
-    buttonColorViewModel: ButtonColorViewModel,
     modifier: Modifier = Modifier,
     enabled: Boolean = true
 ) {
     var showPicker by remember { mutableStateOf(false) }
 
-    Button(
-        onClick = { showPicker = true },
+    SettingsShortcutRow(
+        icon = icon,
+        label = label,
         enabled = enabled,
-        colors = shortcutButtonColors(buttonColorViewModel),
+        onClick = { showPicker = true },
         modifier = modifier
-    ) {
-        Text(label)
-    }
+    )
 
     if (showPicker) {
         BackgroundPickerDialog(

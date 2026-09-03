@@ -30,11 +30,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.djkaylfromdownunder.musicplayer.data.BackgroundTarget
 import com.djkaylfromdownunder.musicplayer.ui.*
-import kotlinx.coroutines.delay
-
-// How long the dock's auto-hide bar is held on screen after a drag-reorder change, so
-// finishing a reorder doesn't immediately get swallowed by the bar sliding away.
-private const val DOCK_REORDER_LOCK_MS = 10_000L
 
 object Routes {
     const val LIBRARY = "library"
@@ -45,6 +40,7 @@ object Routes {
     const val SETTINGS = "settings"
     const val SKIP_REVIEW = "skip_review"
     const val SEARCH = "search"
+    const val DOCK_SETTINGS = "dock_settings"
     const val FOLDER_PATTERN = "folder/{encodedUri}/{encodedName}"
 
     /** Builds a navigable route for a specific folder, URL-encoding its URI and name. */
@@ -83,7 +79,7 @@ fun AppNavHost() {
 
     // Full-screen destinations that hide the mini-player/bottom nav entirely.
     val hideBottomBarRoutes = setOf(
-        Routes.PLAYER, Routes.SKIP_REVIEW, Routes.SEARCH, Routes.CREATE_PLAYLIST
+        Routes.PLAYER, Routes.SKIP_REVIEW, Routes.SEARCH, Routes.CREATE_PLAYLIST, Routes.DOCK_SETTINGS
     )
 
     // "Random Skip All Albums" is a single shared toggle (PlayerViewModel.uiState) rather
@@ -96,24 +92,6 @@ fun AppNavHost() {
 
     val visibleDockIds by dockPreferencesViewModel.visibleIds.collectAsState()
     val dockItems = remember(visibleDockIds) { dockPreferencesViewModel.resolve(visibleDockIds) }
-
-    // Reordering the dock shouldn't fight the auto-hide bar: it's pinned visible for the
-    // whole drag, and for a further DOCK_REORDER_LOCK_MS after each change lands, so the
-    // result is still on screen once the finger lifts instead of immediately sliding away.
-    var dockReorderChangeTick by remember { mutableStateOf(0) }
-    var dockRecentlyReordered by remember { mutableStateOf(false) }
-    val dockDragState = rememberGridReorderState { ids ->
-        dockPreferencesViewModel.setOrderedIds(ids)
-        dockReorderChangeTick++
-    }
-    LaunchedEffect(dockReorderChangeTick) {
-        if (dockReorderChangeTick > 0) {
-            dockRecentlyReordered = true
-            delay(DOCK_REORDER_LOCK_MS)
-            dockRecentlyReordered = false
-        }
-    }
-    val keepDockBarVisible = dockDragState.isAnyDragging || dockRecentlyReordered
 
     Scaffold(
             bottomBar = {
@@ -128,7 +106,6 @@ fun AppNavHost() {
                             AppBottomNav(
                                 dockItems = dockItems,
                                 currentRoute = if (isFolderRoute) Routes.LIBRARY else currentRoute,
-                                dragState = dockDragState,
                                 onNavigate = { route ->
                                     navController.navigate(route) {
                                         popUpTo(Routes.LIBRARY) { inclusive = false }
@@ -144,7 +121,7 @@ fun AppNavHost() {
                     // folder browsing) and Play Lists - every other tab keeps the bar
                     // permanently visible.
                     if (isFolderRoute || currentRoute == Routes.LIBRARY || currentRoute == Routes.PLAYLISTS) {
-                        AutoHideBottomBar(forceVisible = keepDockBarVisible, content = bar)
+                        AutoHideBottomBar(content = bar)
                     } else {
                         bar()
                     }
@@ -290,12 +267,18 @@ fun AppNavHost() {
                             themeViewModel = themeViewModel,
                             fontPreferencesViewModel = fontPreferencesViewModel,
                             settingsLayoutViewModel = settingsLayoutViewModel,
-                            dockPreferencesViewModel = dockPreferencesViewModel,
                             buttonColorViewModel = buttonColorViewModel,
                             audioNormalizationViewModel = audioNormalizationViewModel,
-                            onNavigateToSkipReview = { navController.navigate(Routes.SKIP_REVIEW) }
+                            onNavigateToSkipReview = { navController.navigate(Routes.SKIP_REVIEW) },
+                            onNavigateToDockSettings = { navController.navigate(Routes.DOCK_SETTINGS) }
                         )
                     }
+                }
+                composable(Routes.DOCK_SETTINGS) {
+                    DockSettingsScreen(
+                        dockPreferencesViewModel = dockPreferencesViewModel,
+                        onBack = { navController.popBackStack() }
+                    )
                 }
                 composable(Routes.SKIP_REVIEW) {
                     SkipReviewScreen(

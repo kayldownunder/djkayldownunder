@@ -3,76 +3,58 @@ package com.djkaylfromdownunder.musicplayer.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
 import com.djkaylfromdownunder.musicplayer.ui.theme.SurfaceDark
 
-private const val DOCK_COLUMNS = 4
+// How many icons are sized to fit on screen at once - each icon is given 1/4 of the screen
+// width, matching the old 4-column grid's sizing, so the row looks the same at a glance.
+// Any icons beyond that are still laid out in the same row - just off to the side - and
+// reachable by swiping left/right rather than wrapping to a second row.
+private const val DOCK_VISIBLE_ICONS = 4
 
 /**
- * Bottom dock: whichever icons the user has kept visible, laid out as a fixed 4-column grid
- * (two rows at the default 8 icons) so every shortcut gets enough width for its label to
- * stay on one line.
- *
- * Long-pressing and dragging an icon reorders it in place - dragging works across the whole
- * grid (any position to any other position, including far-right to far-left), since it's a
- * single flat ordered list under a fixed-column grid rather than two independent rows. See
- * [DragReorderGrid] for the shared long-press-drag mechanism (also used by the Settings
- * screen's own shortcut grid) - `Modifier.animateItem()` on the non-dragged icons is what
- * gives the "other icons slide out of the way live" feel as one is dragged past them. The
- * shuffle previews live as you drag, but the new order is only persisted once (via
- * [dragState]'s `onReorder`) when the finger lifts - [dragState] is hoisted to the caller
- * (see AppNavHost) rather than created here, so it can also keep the auto-hide bottom bar
- * pinned visible for the duration of the drag.
+ * Bottom dock: whichever icons the user has kept visible, laid out as a single horizontally
+ * scrollable row - sized so [DOCK_VISIBLE_ICONS] fit on screen at once, with any remaining
+ * icons reachable by swiping left/right. Which icons show and in what order is set from the
+ * Settings screen's "Customise Bottom Dock" sheet (see DockVisibilitySheet) rather than by
+ * dragging icons in the dock itself.
  */
 @Composable
 fun AppBottomNav(
     dockItems: List<DockItemDef>,
     currentRoute: String?,
-    dragState: GridReorderState,
     onNavigate: (String) -> Unit,
     onPushNavigate: (String) -> Unit,
     onViewClick: () -> Unit
 ) {
-    val ids = dockItems.map { it.id }
-    val displayItems = dragState.displayOrder(dockItems) { it.id }
+    val itemWidth = LocalConfiguration.current.screenWidthDp.dp / DOCK_VISIBLE_ICONS
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(DOCK_COLUMNS),
-        userScrollEnabled = false,
+    LazyRow(
         modifier = Modifier
             .fillMaxWidth()
             .background(SurfaceDark)
             // Background still paints all the way down behind the system nav bar (no color
-            // seam); this only pushes the actual icon rows up clear of it.
+            // seam); this only pushes the actual icon row up clear of it.
             .navigationBarsPadding()
-            .height(112.dp)
+            .height(56.dp)
     ) {
-        itemsIndexed(displayItems, key = { _, item -> item.id }) { _, item ->
+        items(dockItems, key = { it.id }) { item ->
             val selected = item.actionType != DockActionType.VIEW_SHEET && currentRoute == item.route
-            val isDragging = dragState.isDragging(item.id)
             DockIconButton(
                 item = item,
                 selected = selected,
-                // Disabled while any icon is dragging (not just this one) so a finger
-                // lifting over a neighboring icon mid-drag can't also fire its navigation.
-                clickEnabled = !dragState.isAnyDragging,
-                modifier = Modifier
-                    .zIndex(if (isDragging) 1f else 0f)
-                    .then(if (isDragging) Modifier else Modifier.animateItem())
-                    .dragReorderTransform(dragState, item.id)
-                    .dragReorderItem(dragState, item.id) { ids },
+                modifier = Modifier.width(itemWidth),
                 onClick = {
                     when (item.actionType) {
                         DockActionType.TAB -> item.route?.let(onNavigate)
@@ -89,16 +71,14 @@ fun AppBottomNav(
 private fun DockIconButton(
     item: DockItemDef,
     selected: Boolean,
-    clickEnabled: Boolean,
     modifier: Modifier,
     onClick: () -> Unit
 ) {
     val tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
     Column(
         modifier = modifier
-            .fillMaxWidth()
             .height(56.dp)
-            .clickable(enabled = clickEnabled, onClick = onClick),
+            .clickable(onClick = onClick),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {

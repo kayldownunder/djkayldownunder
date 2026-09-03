@@ -238,12 +238,8 @@ fun PlayerScreen(
         // Delete. The "skip this song next time" checkbox sits separately, directly
         // under the album artwork below.
         if (folderUri != null && trackUri != null) {
-            Row(
-                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                // SpaceBetween pushes Skip to the far left and Delete to the far right by
-                // the same distance, with Heart landing evenly between them.
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+            Box(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp).height(40.dp)
             ) {
                 Button(
                     onClick = { viewModel.skipNext() },
@@ -252,6 +248,7 @@ fun PlayerScreen(
                         contentColor = MaterialTheme.colorScheme.onPrimary
                     ),
                     modifier = Modifier
+                        .align(Alignment.CenterStart)
                         .height(40.dp)
                         .onGloballyPositioned {
                             if (skipDefaultCenterPx == null) {
@@ -262,9 +259,12 @@ fun PlayerScreen(
                 ) {
                     Text("Skip")
                 }
+                // Centered on the row itself (not evenly spaced between Skip and Delete,
+                // which would land it off-center since Skip and Delete aren't the same
+                // width) so it sits in the true middle of the screen.
                 IconButton(
                     onClick = { isFavorite = customPlaylistViewModel.toggleFavoriteTrack(trackUri) },
-                    modifier = Modifier.size(40.dp)
+                    modifier = Modifier.align(Alignment.Center).size(40.dp)
                 ) {
                     Icon(
                         imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
@@ -275,6 +275,7 @@ fun PlayerScreen(
                 IconButton(
                     onClick = { showDeleteDialog = true },
                     modifier = Modifier
+                        .align(Alignment.CenterEnd)
                         .size(40.dp)
                         .onGloballyPositioned {
                             if (deleteDefaultCenterPx == null) {
@@ -773,4 +774,3 @@ private fun PlaybackControls(state: PlayerUiState, viewModel: PlayerViewModel) {
         }
     }
 }
-

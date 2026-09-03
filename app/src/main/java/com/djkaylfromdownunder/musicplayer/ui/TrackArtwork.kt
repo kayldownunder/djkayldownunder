@@ -47,8 +47,12 @@ private object EmbeddedArtCache {
     }
 }
 
-/** Decodes embedded art downsampled to roughly [targetSizePx], instead of at full resolution. */
-private fun decodeSampledBitmap(bytes: ByteArray, targetSizePx: Int): Bitmap? {
+/**
+ * Decodes embedded art downsampled to roughly [targetSizePx], instead of at full resolution.
+ * Internal rather than private so FolderBrowserScreen can reuse it for its own fallback
+ * cover art decoding, which needs the same downsampling to avoid full-resolution decodes.
+ */
+internal fun decodeSampledBitmap(bytes: ByteArray, targetSizePx: Int): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
 

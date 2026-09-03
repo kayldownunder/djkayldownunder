@@ -1,30 +1,37 @@
 package com.djkaylfromdownunder.musicplayer.ui
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.GridItemSpan
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.zIndex
 import com.djkaylfromdownunder.musicplayer.data.BackgroundTarget
+import com.djkaylfromdownunder.musicplayer.ui.theme.SettingsTypography
 import kotlinx.coroutines.launch
 
 /**
- * Just the functional buttons, no section-title labels above them - which of
+ * Just the functional shortcuts, no section-title labels above them - which of
  * [ALL_SETTINGS_BLOCKS] appear and in what order comes from [SettingsLayoutViewModel].
- * Long-press and drag any shortcut to reorder it in place (see [DragReorderGrid], shared
- * with the bottom dock) - the order saves as you drag, no separate editor screen needed.
- * Laid out as a compact 2-column grid so every shortcut fits on one screen without
- * scrolling on a typical device (the grid scrolls on its own as a fallback - e.g. a very
- * large chosen font size could still overflow it).
+ * Reordering is long-press-and-tap, matching [DockSettingsScreen]: a long press on a shortcut
+ * reveals up/down arrows on that row, moves are staged locally, and nothing is persisted to
+ * [SettingsLayoutViewModel] until the Save button at the bottom is tapped - tapping it commits
+ * the new order and collapses back to normal (non-editing) operation.
+ * Each shortcut is a single full-width row (icon on the left, label next to it, transparent
+ * background - see [SettingsShortcutRow]) rather than a colored button, so the list reads
+ * like a plain settings menu.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun SettingsScreen(
     libraryViewModel: MusicLibraryViewModel,
@@ -32,27 +39,38 @@ fun SettingsScreen(
     themeViewModel: ThemeViewModel,
     fontPreferencesViewModel: FontPreferencesViewModel,
     settingsLayoutViewModel: SettingsLayoutViewModel,
-    dockPreferencesViewModel: DockPreferencesViewModel,
     buttonColorViewModel: ButtonColorViewModel,
     audioNormalizationViewModel: AudioNormalizationViewModel,
-    onNavigateToSkipReview: () -> Unit
+    onNavigateToSkipReview: () -> Unit,
+    onNavigateToDockSettings: () -> Unit
 ) {
     val rootUri by libraryViewModel.rootUri.collectAsState()
+    val fontPrefs by fontPreferencesViewModel.fontPrefs.collectAsState()
     val metadataProgress by metadataViewModel.progress.collectAsState()
     var isScanningLibrary by remember { mutableStateOf(false) }
     var showFontDialog by remember { mutableStateOf(false) }
-    var showDockVisibilitySheet by remember { mutableStateOf(false) }
     var isConsolidatingArtwork by remember { mutableStateOf(false) }
     var consolidateResult by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     val order by settingsLayoutViewModel.order.collectAsState()
-    val blocks = remember(order) {
-        val byId = ALL_SETTINGS_BLOCKS.associateBy { it.id }
-        order.mapNotNull { byId[it] }
+    val byId = remember { ALL_SETTINGS_BLOCKS.associateBy { it.id } }
+
+    var pendingOrder by remember(order) { mutableStateOf(order) }
+    var expandedBlockId by remember { mutableStateOf<String?>(null) }
+
+    val blocks = remember(pendingOrder) { pendingOrder.mapNotNull { byId[it] } }
+    val hasUnsavedChanges = pendingOrder != order
+
+    fun moveBlock(id: String, delta: Int) {
+        val list = pendingOrder.toMutableList()
+        val fromIndex = list.indexOf(id)
+        val toIndex = fromIndex + delta
+        if (fromIndex < 0 || toIndex < 0 || toIndex >= list.size) return
+        val moved = list.removeAt(fromIndex)
+        list.add(toIndex, moved)
+        pendingOrder = list
     }
-    val blockIds = blocks.map { it.id }
-    val dragState = rememberGridReorderState { newOrder -> settingsLayoutViewModel.setOrder(newOrder) }
 
     fun fetchAllMetadata() {
         scope.launch {
@@ -80,117 +98,142 @@ fun SettingsScreen(
         }
     }
 
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-        modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp)
-    ) {
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            // Only this row needs it (it's the one screen in the app putting an interactive
-            // button, not just title text, right up against the top edge) - a status-bar
-            // icon sitting on top of a real tap target would make it unreliable to hit.
-            Box(
-                modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 12.dp, bottom = 24.dp)
+    SettingsTypography(fontPrefs) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            LazyColumn(
+                modifier = Modifier.weight(1f).padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
-                Text(
-                    "Settings",
-                    style = MaterialTheme.typography.headlineLarge,
-                    modifier = Modifier.align(Alignment.Center)
-                )
-                IconButton(
-                    onClick = { showFontDialog = true },
-                    modifier = Modifier.align(Alignment.CenterEnd)
-                ) {
-                    Icon(
-                        Icons.Default.Settings,
-                        contentDescription = "Font & Appearance Settings",
-                        modifier = Modifier.size(32.dp)
-                    )
-                }
-            }
-        }
-
-        val displayBlocks = dragState.displayOrder(blocks) { it.id }
-        itemsIndexed(displayBlocks, key = { _, block -> block.id }) { _, block ->
-            val isDragging = dragState.isDragging(block.id)
-            Box(
-                modifier = Modifier
-                    .zIndex(if (isDragging) 1f else 0f)
-                    .then(if (isDragging) Modifier else Modifier.animateItem())
-                    .dragReorderTransform(dragState, block.id)
-                    .dragReorderItem(dragState, block.id) { blockIds }
-            ) {
-                SettingsBlockButton(
-                    block = block,
-                    libraryViewModel = libraryViewModel,
-                    themeViewModel = themeViewModel,
-                    buttonColorViewModel = buttonColorViewModel,
-                    rootUri = rootUri,
-                    metadataRunning = metadataProgress.isRunning,
-                    isScanningLibrary = isScanningLibrary,
-                    isConsolidatingArtwork = isConsolidatingArtwork,
-                    consolidateResult = consolidateResult,
-                    dragEnabled = !dragState.isAnyDragging,
-                    audioNormalizationViewModel = audioNormalizationViewModel,
-                    onFetchAllMetadata = ::fetchAllMetadata,
-                    onConsolidateArtwork = ::consolidateArtwork,
-                    onNavigateToSkipReview = onNavigateToSkipReview,
-                    onShowDockVisibility = { showDockVisibilitySheet = true }
-                )
-            }
-        }
-
-        if (metadataProgress.isRunning) {
-            item(span = { GridItemSpan(maxLineSpan) }) {
-                Column {
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    val label = if (metadataProgress.isBatch) {
-                        "Playlist ${metadataProgress.playlistIndex}/${metadataProgress.totalPlaylists}: ${metadataProgress.playlistName ?: ""}"
-                    } else {
-                        metadataProgress.playlistName ?: "Fetching…"
+                item {
+                    Box(
+                        modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 12.dp, bottom = 24.dp)
+                    ) {
+                        Text(
+                            "Settings",
+                            style = MaterialTheme.typography.headlineLarge,
+                            modifier = Modifier.align(Alignment.Center)
+                        )
                     }
-                    Text(label, style = MaterialTheme.typography.bodySmall)
+                }
 
-                    Spacer(modifier = Modifier.height(4.dp))
+                if (hasUnsavedChanges) {
+                    item {
+                        Text(
+                            "Long-press a shortcut to move it up or down, then tap Save.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 8.dp)
+                        )
+                    }
+                }
 
-                    val trackProgress = if (metadataProgress.totalTracks > 0) {
-                        metadataProgress.completedTracks.toFloat() / metadataProgress.totalTracks.toFloat()
-                    } else 0f
+                itemsIndexed(blocks, key = { _, block -> block.id }) { index, block ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .combinedClickable(
+                                onClick = {},
+                                onLongClick = {
+                                    expandedBlockId = if (expandedBlockId == block.id) null else block.id
+                                }
+                            )
+                    ) {
+                        SettingsBlockButton(
+                            block = block,
+                            libraryViewModel = libraryViewModel,
+                            themeViewModel = themeViewModel,
+                            buttonColorViewModel = buttonColorViewModel,
+                            rootUri = rootUri,
+                            metadataRunning = metadataProgress.isRunning,
+                            isScanningLibrary = isScanningLibrary,
+                            isConsolidatingArtwork = isConsolidatingArtwork,
+                            consolidateResult = consolidateResult,
+                            audioNormalizationViewModel = audioNormalizationViewModel,
+                            onFetchAllMetadata = ::fetchAllMetadata,
+                            onConsolidateArtwork = ::consolidateArtwork,
+                            onNavigateToSkipReview = onNavigateToSkipReview,
+                            onShowDockVisibility = onNavigateToDockSettings,
+                            onShowFontSettings = { showFontDialog = true }
+                        )
+                        if (expandedBlockId == block.id) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
+                                horizontalArrangement = Arrangement.End
+                            ) {
+                                IconButton(
+                                    onClick = { moveBlock(block.id, -1) },
+                                    enabled = index > 0
+                                ) {
+                                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move ${block.label} up")
+                                }
+                                IconButton(
+                                    onClick = { moveBlock(block.id, 1) },
+                                    enabled = index < blocks.size - 1
+                                ) {
+                                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move ${block.label} down")
+                                }
+                            }
+                        }
+                    }
+                }
 
-                    LinearProgressIndicator(
-                        progress = { trackProgress },
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "Track ${metadataProgress.completedTracks}/${metadataProgress.totalTracks}" +
-                            (metadataProgress.currentTrackName?.let { " — $it" } ?: ""),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                if (metadataProgress.isRunning) {
+                    item {
+                        Column {
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            val label = if (metadataProgress.isBatch) {
+                                "Playlist ${metadataProgress.playlistIndex}/${metadataProgress.totalPlaylists}: ${metadataProgress.playlistName ?: ""}"
+                            } else {
+                                metadataProgress.playlistName ?: "Fetching…"
+                            }
+                            Text(label, style = MaterialTheme.typography.bodySmall)
+
+                            Spacer(modifier = Modifier.height(4.dp))
+
+                            val trackProgress = if (metadataProgress.totalTracks > 0) {
+                                metadataProgress.completedTracks.toFloat() / metadataProgress.totalTracks.toFloat()
+                            } else 0f
+
+                            LinearProgressIndicator(
+                                progress = { trackProgress },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                "Track ${metadataProgress.completedTracks}/${metadataProgress.totalTracks}" +
+                                    (metadataProgress.currentTrackName?.let { " — $it" } ?: ""),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+
+            if (hasUnsavedChanges) {
+                Button(
+                    onClick = {
+                        settingsLayoutViewModel.setOrder(pendingOrder)
+                        expandedBlockId = null
+                    },
+                    modifier = Modifier.fillMaxWidth().padding(16.dp).navigationBarsPadding()
+                ) {
+                    Text("Save")
                 }
             }
         }
 
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Spacer(modifier = Modifier.height(16.dp))
+        if (showFontDialog) {
+            FontSettingsDialog(
+                fontPreferencesViewModel = fontPreferencesViewModel,
+                onDismiss = { showFontDialog = false }
+            )
         }
-    }
-
-    if (showFontDialog) {
-        FontSettingsDialog(
-            fontPreferencesViewModel = fontPreferencesViewModel,
-            onDismiss = { showFontDialog = false }
-        )
-    }
-
-    if (showDockVisibilitySheet) {
-        DockVisibilitySheet(
-            dockPreferencesViewModel = dockPreferencesViewModel,
-            onDismiss = { showDockVisibilitySheet = false }
-        )
     }
 }
 
@@ -205,106 +248,136 @@ private fun SettingsBlockButton(
     isScanningLibrary: Boolean,
     isConsolidatingArtwork: Boolean,
     consolidateResult: String?,
-    dragEnabled: Boolean,
     audioNormalizationViewModel: AudioNormalizationViewModel,
     onFetchAllMetadata: () -> Unit,
     onConsolidateArtwork: () -> Unit,
     onNavigateToSkipReview: () -> Unit,
-    onShowDockVisibility: () -> Unit
+    onShowDockVisibility: () -> Unit,
+    onShowFontSettings: () -> Unit
 ) {
     val fillWidth = Modifier.fillMaxWidth()
     when (block.id) {
+        "font_appearance" -> SettingsShortcutRow(
+            icon = block.icon,
+            label = block.label,
+            onClick = onShowFontSettings,
+            modifier = fillWidth
+        )
         "music_library" -> ChooseMusicFolderButton(
             viewModel = libraryViewModel,
             modifier = fillWidth,
             label = block.label,
-            enabled = dragEnabled,
+            icon = block.icon,
             buttonColorViewModel = buttonColorViewModel
         )
         "metadata" -> Column(modifier = fillWidth) {
+            SettingsShortcutRow(
+                icon = block.icon,
+                label = block.label,
+                enabled = rootUri != null && !metadataRunning && !isScanningLibrary,
+                onClick = onFetchAllMetadata
+            )
             if (isScanningLibrary) {
                 Text(
                     "Scanning library…",
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 38.dp, bottom = 4.dp)
                 )
-                Spacer(modifier = Modifier.height(4.dp))
-            }
-            Button(
-                onClick = onFetchAllMetadata,
-                enabled = dragEnabled && rootUri != null && !metadataRunning && !isScanningLibrary,
-                colors = shortcutButtonColors(buttonColorViewModel),
-                modifier = fillWidth
-            ) {
-                Text(block.label)
             }
         }
         "consolidate_artwork" -> Column(modifier = fillWidth) {
-            Button(
-                onClick = onConsolidateArtwork,
-                enabled = dragEnabled && rootUri != null && !isConsolidatingArtwork,
-                colors = shortcutButtonColors(buttonColorViewModel),
-                modifier = fillWidth
-            ) {
-                Text(if (isConsolidatingArtwork) "Moving images…" else block.label)
-            }
+            SettingsShortcutRow(
+                icon = block.icon,
+                label = if (isConsolidatingArtwork) "Moving images…" else block.label,
+                enabled = rootUri != null && !isConsolidatingArtwork,
+                onClick = onConsolidateArtwork
+            )
             if (consolidateResult != null) {
-                Spacer(modifier = Modifier.height(4.dp))
                 Text(
                     consolidateResult,
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 38.dp, bottom = 4.dp)
                 )
             }
         }
         "library_background" -> BackgroundShortcutButton(
             target = BackgroundTarget.LIBRARY,
             label = block.label,
+            icon = block.icon,
             themeViewModel = themeViewModel,
-            buttonColorViewModel = buttonColorViewModel,
-            modifier = fillWidth,
-            enabled = dragEnabled
+            modifier = fillWidth
         )
         "settings_background" -> BackgroundShortcutButton(
             target = BackgroundTarget.SETTINGS,
             label = block.label,
+            icon = block.icon,
             themeViewModel = themeViewModel,
-            buttonColorViewModel = buttonColorViewModel,
-            modifier = fillWidth,
-            enabled = dragEnabled
+            modifier = fillWidth
         )
-        "dock_visibility" -> Button(
+        "dock_visibility" -> SettingsShortcutRow(
+            icon = block.icon,
+            label = block.label,
             onClick = onShowDockVisibility,
-            enabled = dragEnabled,
-            colors = shortcutButtonColors(buttonColorViewModel),
             modifier = fillWidth
-        ) {
-            Text(block.label)
-        }
-        "skip_review" -> Button(
+        )
+        "skip_review" -> SettingsShortcutRow(
+            icon = block.icon,
+            label = block.label,
             onClick = onNavigateToSkipReview,
-            enabled = dragEnabled,
-            colors = shortcutButtonColors(buttonColorViewModel),
             modifier = fillWidth
-        ) {
-            Text(block.label)
-        }
+        )
         "shortcut_button_color" -> ShortcutButtonColorPicker(
             buttonColorViewModel = buttonColorViewModel,
             modifier = fillWidth,
             label = block.label,
-            enabled = dragEnabled
+            icon = block.icon
         )
         "audio_normalization" -> {
             val isEnabled by audioNormalizationViewModel.isEnabled.collectAsState()
-            Button(
+            SettingsShortcutRow(
+                icon = block.icon,
+                label = if (isEnabled) "${block.label}: On" else "${block.label}: Off",
                 onClick = { audioNormalizationViewModel.toggle() },
-                enabled = dragEnabled,
-                colors = shortcutButtonColors(buttonColorViewModel),
                 modifier = fillWidth
-            ) {
-                Text(if (isEnabled) "${block.label}: On" else "${block.label}: Off")
-            }
+            )
         }
+    }
+}
+
+/**
+ * A single Settings shortcut: icon on the left, label on one line next to it, transparent
+ * background rather than a colored button - every block on the Settings screen renders as
+ * one of these (or wraps one, for blocks with an extra status line underneath).
+ */
+@Composable
+fun SettingsShortcutRow(
+    icon: ImageVector,
+    label: String,
+    enabled: Boolean = true,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Row(
+        modifier = modifier
+            .clickable(enabled = enabled, onClick = onClick)
+            .padding(vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        val contentColor = if (enabled) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
+        }
+        Icon(icon, contentDescription = null, tint = contentColor, modifier = Modifier.size(22.dp))
+        Spacer(modifier = Modifier.width(16.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = contentColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }
