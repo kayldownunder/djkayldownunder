@@ -149,21 +149,33 @@ fun SettingsScreen(
                             }
                         )
                         if (expandedBlockId == block.id) {
+                            val canMoveUp = index > 0
+                            val canMoveDown = index < blocks.size - 1
                             Row(
-                                modifier = Modifier.fillMaxWidth().padding(bottom = 4.dp),
-                                horizontalArrangement = Arrangement.End
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                horizontalArrangement = Arrangement.Center
                             ) {
                                 IconButton(
                                     onClick = { moveBlock(block.id, -1) },
-                                    enabled = index > 0
+                                    enabled = canMoveUp
                                 ) {
-                                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move ${block.label} up")
+                                    Icon(
+                                        Icons.Default.KeyboardArrowUp,
+                                        contentDescription = "Move ${block.label} up",
+                                        tint = MaterialTheme.colorScheme.error.copy(alpha = if (canMoveUp) 1f else 0.38f),
+                                        modifier = Modifier.size(48.dp)
+                                    )
                                 }
                                 IconButton(
                                     onClick = { moveBlock(block.id, 1) },
-                                    enabled = index < blocks.size - 1
+                                    enabled = canMoveDown
                                 ) {
-                                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move ${block.label} down")
+                                    Icon(
+                                        Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "Move ${block.label} down",
+                                        tint = MaterialTheme.colorScheme.error.copy(alpha = if (canMoveDown) 1f else 0.38f),
+                                        modifier = Modifier.size(48.dp)
+                                    )
                                 }
                             }
                         }
