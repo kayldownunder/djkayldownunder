@@ -1,7 +1,9 @@
 package com.djkaylfromdownunder.musicplayer.ui
 
 import android.net.Uri
+import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.rememberScrollableState
@@ -18,12 +20,15 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -39,9 +44,14 @@ import androidx.compose.ui.unit.dp
 import com.djkaylfromdownunder.musicplayer.data.Playlist
 import com.djkaylfromdownunder.musicplayer.data.Track
 import com.djkaylfromdownunder.musicplayer.data.parentFolderKey
+import com.djkaylfromdownunder.musicplayer.ui.theme.AccentCoral
 import com.djkaylfromdownunder.musicplayer.ui.theme.AccentCoralDim
 import com.djkaylfromdownunder.musicplayer.ui.theme.BackgroundBlack
 import com.djkaylfromdownunder.musicplayer.ui.theme.SurfaceCard
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlin.random.Random
 
 // Artwork shrinks from this height down to nothing as the track list below is scrolled.
 private val MAX_ARTWORK_HEIGHT = 380.dp
@@ -160,6 +170,34 @@ fun PlayerScreen(
     // artwork, so it doesn't stay collapsed from browsing the list on the previous track.
     LaunchedEffect(state.currentTrack?.uri) {
         artHeightPx = maxArtHeightPx
+    }
+
+    // "Animate": when selected, jitters the album artwork in a little rhythmic vibration
+    // while the track is actually playing (paused tracks sit still). This is a decorative
+    // shake, not driven by real audio analysis - PlayerViewModel only holds a MediaController,
+    // not the underlying ExoPlayer, so there's no audio session to attach a visualizer to.
+    // rememberSaveable (not remember) so the selection survives the screen turning off -
+    // which can recreate this screen (config change, or the process being killed in the
+    // background while the lock screen is up) - and the shake resumes on its own via the
+    // LaunchedEffect below once state.isPlaying goes true again, with no need to reselect it.
+    var isAnimateEnabled by rememberSaveable { mutableStateOf(false) }
+    val shakeOffsetX = remember { Animatable(0f) }
+    val shakeOffsetY = remember { Animatable(0f) }
+    val shakeRotation = remember { Animatable(0f) }
+    LaunchedEffect(isAnimateEnabled, state.isPlaying) {
+        if (isAnimateEnabled && state.isPlaying) {
+            val maxOffsetPx = with(density) { 6.dp.toPx() }
+            while (isActive) {
+                launch { shakeOffsetX.animateTo((Random.nextFloat() * 2f - 1f) * maxOffsetPx, tween(70)) }
+                launch { shakeOffsetY.animateTo((Random.nextFloat() * 2f - 1f) * maxOffsetPx, tween(70)) }
+                launch { shakeRotation.animateTo(Random.nextFloat() * 4f - 2f, tween(70)) }
+                delay(70)
+            }
+        } else {
+            shakeOffsetX.animateTo(0f, tween(150))
+            shakeOffsetY.animateTo(0f, tween(150))
+            shakeRotation.animateTo(0f, tween(150))
+        }
     }
 
     // Aligns Skip under the "N" of "Now Playing" and Delete under the "g" of "Playing":
@@ -319,8 +357,10 @@ fun PlayerScreen(
                     orientation = Orientation.Vertical
                 )
             ) {
-                // Top half: collapsible album artwork. Shrinks to nothing and fades out as
-                // the track list is scrolled.
+                // Top half: collapsible album artwork, plus the skip-checkbox/Animate row
+                // directly under it - both shrink to nothing and fade out together as the
+                // track list is scrolled, rather than the row lingering after the art itself
+                // has disappeared.
                 if (artHeightPx > 0.5f) {
                     val artHeightDp = with(density) { artHeightPx.toDp() }
                     val artFraction = (artHeightPx / maxArtHeightPx).coerceIn(0f, 1f)
@@ -338,6 +378,11 @@ fun PlayerScreen(
                                 .aspectRatio(1f, matchHeightConstraintsFirst = true)
                                 .clip(RoundedCornerShape(16.dp))
                                 .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .graphicsLayer {
+                                    translationX = shakeOffsetX.value
+                                    translationY = shakeOffsetY.value
+                                    rotationZ = shakeRotation.value
+                                }
                         ) {
                             TrackArtwork(
                                 track = state.currentTrack,
@@ -346,28 +391,37 @@ fun PlayerScreen(
                             )
                         }
                     }
-                }
 
-                // "Skip this song next time": tick to always skip this track in this
-                // playlist from now on. Sits directly under the album artwork.
-                if (folderUri != null && trackUri != null) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Checkbox(
-                            checked = isSkipMarked,
-                            onCheckedChange = { checked ->
-                                isSkipMarked = checked
-                                skipListViewModel.setSkipped(folderUri, trackUri, checked)
-                                skipRefreshTick++
-                            }
-                        )
-                        Text(
-                            "Skip this song next time",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
+                    // "Skip This Song Next Time" (left) and the Animate toggle (far right)
+                    // - matching pill buttons, same row.
+                    if (folderUri != null && trackUri != null) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 24.dp)
+                                .graphicsLayer { alpha = artFraction },
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            ToggleChip(
+                                selected = isSkipMarked,
+                                icon = Icons.Default.SkipNext,
+                                label = "Skip This Song Next Time",
+                                onClick = {
+                                    val checked = !isSkipMarked
+                                    isSkipMarked = checked
+                                    skipListViewModel.setSkipped(folderUri, trackUri, checked)
+                                    skipRefreshTick++
+                                }
+                            )
+                            Spacer(modifier = Modifier.weight(1f))
+                            ToggleChip(
+                                selected = isAnimateEnabled,
+                                icon = Icons.Default.Vibration,
+                                label = "Animate",
+                                isPulsing = isAnimateEnabled && state.isPlaying,
+                                onClick = { isAnimateEnabled = !isAnimateEnabled }
+                            )
+                        }
                     }
                 }
 
@@ -490,6 +544,71 @@ fun PlayerScreen(
         // Library/Play Lists dock, these are the only transport controls on this screen,
         // so they must stay reachable at all times.
         CompactPlaybackBar(state = state, viewModel = viewModel)
+    }
+}
+
+/**
+ * A pill toggle used for the Skip/Animate row under the artwork: fills with the app's coral
+ * accent gradient once selected (echoing the Skip/Play buttons' own color) instead of a plain
+ * Material chip or checkbox. [isPulsing] (Animate only) keeps the icon gently pulsing for as
+ * long as the artwork itself is actually vibrating - a passive reminder that it's live even
+ * when you're not looking at the artwork above.
+ */
+@Composable
+private fun ToggleChip(
+    selected: Boolean,
+    icon: ImageVector,
+    label: String,
+    isPulsing: Boolean = false,
+    onClick: () -> Unit
+) {
+    val infiniteTransition = rememberInfiniteTransition(label = "toggleChipPulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 1f,
+        targetValue = if (isPulsing) 1.3f else 1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(320, easing = FastOutSlowInEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulseScale"
+    )
+    val shape = RoundedCornerShape(50)
+    val contentColor = if (selected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
+
+    Row(
+        modifier = Modifier
+            .clip(shape)
+            .then(
+                if (selected) {
+                    Modifier.background(Brush.horizontalGradient(listOf(AccentCoral, AccentCoralDim)), shape)
+                } else {
+                    Modifier
+                        .background(Color.Transparent, shape)
+                        .border(1.dp, MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f), shape)
+                }
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = contentColor,
+            modifier = Modifier
+                .size(16.dp)
+                .graphicsLayer {
+                    scaleX = pulseScale
+                    scaleY = pulseScale
+                }
+        )
+        Spacer(modifier = Modifier.width(6.dp))
+        Text(
+            label,
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = contentColor
+        )
     }
 }
 
