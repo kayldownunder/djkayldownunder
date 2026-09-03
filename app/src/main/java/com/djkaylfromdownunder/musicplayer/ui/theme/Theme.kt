@@ -23,18 +23,18 @@ private val AppDarkColorScheme = darkColorScheme(
 )
 
 /**
- * Applies the user's Font Settings choices on top of [AppTypography]'s base styles: swaps
- * in [prefs]'s font family, scales every size by [sizeScale], and - only when a color
- * override is actually set - recolors text that doesn't already specify its own explicit
- * color (Text() calls that pass `color = ...` still win over this, e.g. error text stays
- * red). [sizeScale] is passed in separately (rather than read off [prefs] directly) because
- * [FontPrefs] carries two independent size scales - [FontPrefs.albumTextSizeScale] for the
- * app at large and [FontPrefs.settingsTextSizeScale] for just the Settings screen - sharing
- * the same family/color.
+ * Applies a Font Settings choice on top of [AppTypography]'s base styles: swaps in
+ * [familyName], scales every size by [sizeScale], and - only when a color override is
+ * actually set ([colorArgb] != -1) - recolors text that doesn't already specify its own
+ * explicit color (Text() calls that pass `color = ...` still win over this, e.g. error text
+ * stays red). Takes plain primitives rather than a [FontPrefs] directly because [FontPrefs]
+ * carries two fully independent (family, size, color) triples - one for the app at large
+ * ("Playlist Text") and one for just the Settings screen ("Settings Text") - and this same
+ * builder is used for both.
  */
-private fun buildTypography(prefs: FontPrefs, sizeScale: Float): Typography {
-    val family = fontFamilyFor(prefs.fontFamilyName)
-    val overrideColor = if (prefs.fontColorArgb != -1) Color(prefs.fontColorArgb) else null
+private fun buildTypography(familyName: String, sizeScale: Float, colorArgb: Int): Typography {
+    val family = fontFamilyFor(familyName)
+    val overrideColor = if (colorArgb != -1) Color(colorArgb) else null
 
     fun TextStyle.themed(): TextStyle = copy(
         fontFamily = family,
@@ -58,21 +58,29 @@ private fun buildTypography(prefs: FontPrefs, sizeScale: Float): Typography {
 fun DJKaylTheme(fontPrefs: FontPrefs = FontPrefs(), content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = AppDarkColorScheme,
-        typography = buildTypography(fontPrefs, fontPrefs.albumTextSizeScale),
+        typography = buildTypography(
+            fontPrefs.albumFontFamilyName,
+            fontPrefs.albumTextSizeScale,
+            fontPrefs.albumFontColorArgb
+        ),
         content = content
     )
 }
 
 /**
  * Nested typography override for the Settings screen and everything opened from it (Font
- * Settings, background pickers, etc.) - swaps in [FontPrefs.settingsTextSizeScale] in place
- * of the app-wide [FontPrefs.albumTextSizeScale] from [DJKaylTheme], while leaving color
- * scheme and shapes untouched by simply not overriding them.
+ * Settings, background pickers, etc.) - swaps in the "Settings Text" (family, size, color)
+ * from [FontPrefs] in place of the app-wide "Playlist Text" one from [DJKaylTheme], while
+ * leaving color scheme and shapes untouched by simply not overriding them.
  */
 @Composable
 fun SettingsTypography(fontPrefs: FontPrefs, content: @Composable () -> Unit) {
     MaterialTheme(
-        typography = buildTypography(fontPrefs, fontPrefs.settingsTextSizeScale),
+        typography = buildTypography(
+            fontPrefs.settingsFontFamilyName,
+            fontPrefs.settingsTextSizeScale,
+            fontPrefs.settingsFontColorArgb
+        ),
         content = content
     )
 }

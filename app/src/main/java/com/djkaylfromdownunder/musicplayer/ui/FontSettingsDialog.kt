@@ -24,11 +24,11 @@ import com.djkaylfromdownunder.musicplayer.ui.theme.AVAILABLE_FONT_FAMILIES
 import com.djkaylfromdownunder.musicplayer.ui.theme.fontFamilyFor
 
 /**
- * "Visual configuration" modal opened from Settings' "Fonts" shortcut - sample text preview
- * plus font family/size/color controls. Text size is split into two independent fields,
- * [FontPrefs.albumTextSizeScale] ("Album Text Size", used everywhere outside Settings) and
- * [FontPrefs.settingsTextSizeScale] ("Settings Text Size", used only on the Settings screen
- * and its dialogs, this one included) - family and color still apply everywhere. Edits are
+ * "Visual configuration" modal opened from Settings' "Fonts" shortcut - two fully independent
+ * copies of the same font family/size/color/preview controls, one per area: "Playlist Text"
+ * (everywhere outside Settings - Library/Playlist/Player) and "Settings Text" (only the
+ * Settings screen and its dialogs, this one included). See [FontSection] for the shared
+ * control layout and [FontPrefs] for the two backing (family, size, color) triples. Edits are
  * kept in local [draft] state and only committed to [FontPreferencesViewModel] when the
  * modal closes (X button, tap outside, or system back all route through [close]) - a
  * lightweight auto-save-on-back so there's no separate Save button to remember to tap.
@@ -56,7 +56,7 @@ fun FontSettingsDialog(
                 modifier = Modifier
                     .padding(24.dp)
                     .fillMaxWidth()
-                    .heightIn(max = 560.dp)
+                    .heightIn(max = 680.dp)
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -69,94 +69,97 @@ fun FontSettingsDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                // Live sample preview - pinned above the scrollable controls below (not
-                // part of that scroll) so it's always in view while adjusting them, not
-                // just before you start scrolling. Scaled by Album Text Size since that's
-                // what most of the app uses; the Settings Text Size field below has its own
-                // small preview instead, since this box doesn't reflect that scale.
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .padding(20.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    val previewColor = if (draft.fontColorArgb != -1) {
-                        Color(draft.fontColorArgb)
-                    } else {
-                        MaterialTheme.colorScheme.onSurface
-                    }
-                    Text(
-                        text = "The quick brown fox jumps",
-                        fontFamily = fontFamilyFor(draft.fontFamilyName),
-                        fontSize = (16 * draft.albumTextSizeScale).sp,
-                        color = previewColor
-                    )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
+                Spacer(modifier = Modifier.height(12.dp))
 
                 Column(
                     modifier = Modifier
                         .weight(1f, fill = false)
                         .verticalScroll(rememberScrollState())
                 ) {
-                    Text("Font Family", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FontFamilyDropdown(
-                        selected = draft.fontFamilyName,
-                        onSelected = { draft = draft.copy(fontFamilyName = it) }
+                    FontSection(
+                        title = "Playlist Text",
+                        familyName = draft.albumFontFamilyName,
+                        onFamilyChange = { draft = draft.copy(albumFontFamilyName = it) },
+                        sizeScale = draft.albumTextSizeScale,
+                        onSizeChange = { draft = draft.copy(albumTextSizeScale = it) },
+                        colorArgb = draft.albumFontColorArgb,
+                        onColorChange = { draft = draft.copy(albumFontColorArgb = it) }
                     )
 
+                    Spacer(modifier = Modifier.height(28.dp))
+                    HorizontalDivider()
                     Spacer(modifier = Modifier.height(20.dp))
 
-                    Text(
-                        "Album Text Size (${"%.0f".format(draft.albumTextSizeScale * 100)}%)",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Slider(
-                        value = draft.albumTextSizeScale,
-                        onValueChange = { draft = draft.copy(albumTextSizeScale = it) },
-                        valueRange = 0.75f..1.5f
-                    )
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Text(
-                        "Settings Text Size (${"%.0f".format(draft.settingsTextSizeScale * 100)}%)",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                    Slider(
-                        value = draft.settingsTextSizeScale,
-                        onValueChange = { draft = draft.copy(settingsTextSizeScale = it) },
-                        valueRange = 0.75f..1.5f
-                    )
-                    val settingsPreviewColor = if (draft.fontColorArgb != -1) {
-                        Color(draft.fontColorArgb)
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                    Text(
-                        text = "The quick brown fox jumps",
-                        fontFamily = fontFamilyFor(draft.fontFamilyName),
-                        fontSize = (14 * draft.settingsTextSizeScale).sp,
-                        color = settingsPreviewColor
-                    )
-
-                    Spacer(modifier = Modifier.height(12.dp))
-
-                    Text("Font Color", style = MaterialTheme.typography.titleMedium)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    FontColorDropdown(
-                        argb = draft.fontColorArgb,
-                        onSelected = { draft = draft.copy(fontColorArgb = it) }
+                    FontSection(
+                        title = "Settings Text",
+                        familyName = draft.settingsFontFamilyName,
+                        onFamilyChange = { draft = draft.copy(settingsFontFamilyName = it) },
+                        sizeScale = draft.settingsTextSizeScale,
+                        onSizeChange = { draft = draft.copy(settingsTextSizeScale = it) },
+                        colorArgb = draft.settingsFontColorArgb,
+                        onColorChange = { draft = draft.copy(settingsFontColorArgb = it) }
                     )
                 }
             }
         }
+    }
+}
+
+/**
+ * One full, self-contained font configuration block - live sample preview, Font Family,
+ * Text Size, and Font Color - repeated once per area in [FontSettingsDialog] since each
+ * area's font choices are fully independent (see [FontPrefs]).
+ */
+@Composable
+private fun FontSection(
+    title: String,
+    familyName: String,
+    onFamilyChange: (String) -> Unit,
+    sizeScale: Float,
+    onSizeChange: (Float) -> Unit,
+    colorArgb: Int,
+    onColorChange: (Int) -> Unit
+) {
+    Column {
+        Text(title, style = MaterialTheme.typography.titleLarge)
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(20.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val previewColor = if (colorArgb != -1) Color(colorArgb) else MaterialTheme.colorScheme.onSurface
+            Text(
+                text = "The quick brown fox jumps",
+                fontFamily = fontFamilyFor(familyName),
+                fontSize = (16 * sizeScale).sp,
+                color = previewColor
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text("Font Family", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+        FontFamilyDropdown(selected = familyName, onSelected = onFamilyChange)
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            "Text Size (${"%.0f".format(sizeScale * 100)}%)",
+            style = MaterialTheme.typography.titleMedium
+        )
+        Slider(value = sizeScale, onValueChange = onSizeChange, valueRange = 0.75f..1.5f)
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        Text("Font Color", style = MaterialTheme.typography.titleMedium)
+        Spacer(modifier = Modifier.height(8.dp))
+        FontColorDropdown(argb = colorArgb, onSelected = onColorChange)
     }
 }
 
