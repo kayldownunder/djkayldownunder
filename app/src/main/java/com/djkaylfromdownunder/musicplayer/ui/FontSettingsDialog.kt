@@ -7,6 +7,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
@@ -23,15 +24,19 @@ import androidx.compose.ui.window.Dialog
 import com.djkaylfromdownunder.musicplayer.ui.theme.AVAILABLE_FONT_FAMILIES
 import com.djkaylfromdownunder.musicplayer.ui.theme.fontFamilyFor
 
+/** Which of the two independent font configurations [FontSettingsDialog] is showing. */
+private enum class FontSection { PLAYLIST, SETTINGS }
+
 /**
- * "Visual configuration" modal opened from Settings' "Fonts" shortcut - two fully independent
- * copies of the same font family/size/color/preview controls, one per area: "Playlist Text"
- * (everywhere outside Settings - Library/Playlist/Player) and "Settings Text" (only the
- * Settings screen and its dialogs, this one included). See [FontSection] for the shared
- * control layout and [FontPrefs] for the two backing (family, size, color) triples. Edits are
- * kept in local [draft] state and only committed to [FontPreferencesViewModel] when the
- * modal closes (X button, tap outside, or system back all route through [close]) - a
- * lightweight auto-save-on-back so there's no separate Save button to remember to tap.
+ * "Visual configuration" modal opened from Settings' "Fonts" shortcut. The landing screen is
+ * just two buttons, "Playlist Text" and "Settings Text" - picking one drills into a
+ * sub-screen with that area's full, self-contained font family/size/color/preview controls
+ * (see [FontSectionControls]) and a back arrow that returns to the two buttons. [FontPrefs]
+ * backs each area with its own independent (family, size, color) triple. Edits are kept in
+ * local [draft] state and only committed to [FontPreferencesViewModel] when the modal fully
+ * closes (X button, tap outside, or system back all route through [close], from either
+ * screen) - a lightweight auto-save-on-back so there's no separate Save button to remember
+ * to tap.
  */
 @Composable
 fun FontSettingsDialog(
@@ -40,6 +45,7 @@ fun FontSettingsDialog(
 ) {
     val savedPrefs by fontPreferencesViewModel.fontPrefs.collectAsState()
     var draft by remember { mutableStateOf(savedPrefs) }
+    var activeSection by remember { mutableStateOf<FontSection?>(null) }
 
     fun close() {
         fontPreferencesViewModel.save(draft)
@@ -63,42 +69,68 @@ fun FontSettingsDialog(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text("Font Settings", style = MaterialTheme.typography.titleLarge)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (activeSection != null) {
+                            IconButton(onClick = { activeSection = null }) {
+                                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            }
+                        }
+                        Text(
+                            when (activeSection) {
+                                null -> "Font Settings"
+                                FontSection.PLAYLIST -> "Playlist Text"
+                                FontSection.SETTINGS -> "Settings Text"
+                            },
+                            style = MaterialTheme.typography.titleLarge
+                        )
+                    }
                     IconButton(onClick = ::close) {
                         Icon(Icons.Default.Close, contentDescription = "Close")
                     }
                 }
 
-                Spacer(modifier = Modifier.height(12.dp))
+                Spacer(modifier = Modifier.height(20.dp))
 
-                Column(
-                    modifier = Modifier
-                        .weight(1f, fill = false)
-                        .verticalScroll(rememberScrollState())
-                ) {
-                    FontSection(
-                        title = "Playlist Text",
-                        familyName = draft.albumFontFamilyName,
-                        onFamilyChange = { draft = draft.copy(albumFontFamilyName = it) },
-                        sizeScale = draft.albumTextSizeScale,
-                        onSizeChange = { draft = draft.copy(albumTextSizeScale = it) },
-                        colorArgb = draft.albumFontColorArgb,
-                        onColorChange = { draft = draft.copy(albumFontColorArgb = it) }
-                    )
-
-                    Spacer(modifier = Modifier.height(28.dp))
-                    HorizontalDivider()
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    FontSection(
-                        title = "Settings Text",
-                        familyName = draft.settingsFontFamilyName,
-                        onFamilyChange = { draft = draft.copy(settingsFontFamilyName = it) },
-                        sizeScale = draft.settingsTextSizeScale,
-                        onSizeChange = { draft = draft.copy(settingsTextSizeScale = it) },
-                        colorArgb = draft.settingsFontColorArgb,
-                        onColorChange = { draft = draft.copy(settingsFontColorArgb = it) }
-                    )
+                when (activeSection) {
+                    null -> Column {
+                        Button(
+                            onClick = { activeSection = FontSection.PLAYLIST },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Playlist Text")
+                        }
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(
+                            onClick = { activeSection = FontSection.SETTINGS },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Settings Text")
+                        }
+                    }
+                    FontSection.PLAYLIST -> Column(
+                        modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
+                    ) {
+                        FontSectionControls(
+                            familyName = draft.albumFontFamilyName,
+                            onFamilyChange = { draft = draft.copy(albumFontFamilyName = it) },
+                            sizeScale = draft.albumTextSizeScale,
+                            onSizeChange = { draft = draft.copy(albumTextSizeScale = it) },
+                            colorArgb = draft.albumFontColorArgb,
+                            onColorChange = { draft = draft.copy(albumFontColorArgb = it) }
+                        )
+                    }
+                    FontSection.SETTINGS -> Column(
+                        modifier = Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState())
+                    ) {
+                        FontSectionControls(
+                            familyName = draft.settingsFontFamilyName,
+                            onFamilyChange = { draft = draft.copy(settingsFontFamilyName = it) },
+                            sizeScale = draft.settingsTextSizeScale,
+                            onSizeChange = { draft = draft.copy(settingsTextSizeScale = it) },
+                            colorArgb = draft.settingsFontColorArgb,
+                            onColorChange = { draft = draft.copy(settingsFontColorArgb = it) }
+                        )
+                    }
                 }
             }
         }
@@ -107,12 +139,11 @@ fun FontSettingsDialog(
 
 /**
  * One full, self-contained font configuration block - live sample preview, Font Family,
- * Text Size, and Font Color - repeated once per area in [FontSettingsDialog] since each
- * area's font choices are fully independent (see [FontPrefs]).
+ * Text Size, and Font Color - shown for whichever [FontSection] [FontSettingsDialog] has
+ * drilled into, since each area's font choices are fully independent (see [FontPrefs]).
  */
 @Composable
-private fun FontSection(
-    title: String,
+private fun FontSectionControls(
     familyName: String,
     onFamilyChange: (String) -> Unit,
     sizeScale: Float,
@@ -121,9 +152,6 @@ private fun FontSection(
     onColorChange: (Int) -> Unit
 ) {
     Column {
-        Text(title, style = MaterialTheme.typography.titleLarge)
-        Spacer(modifier = Modifier.height(12.dp))
-
         Box(
             modifier = Modifier
                 .fillMaxWidth()
