@@ -8,10 +8,13 @@ import com.djkaylfromdownunder.musicplayer.data.FolderBrowseItem
 import com.djkaylfromdownunder.musicplayer.data.MetadataStore
 import com.djkaylfromdownunder.musicplayer.data.MusicFolderRepository
 import com.djkaylfromdownunder.musicplayer.data.Playlist
+import com.djkaylfromdownunder.musicplayer.data.PlaylistCacheRepository
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 sealed class LibraryState {
     object NoRootChosen : LibraryState()
@@ -23,6 +26,7 @@ sealed class LibraryState {
 class MusicLibraryViewModel(application: Application) : AndroidViewModel(application) {
 
     private val repository = MusicFolderRepository(application)
+    private val playlistCache = PlaylistCacheRepository(application)
 
     // Flat, fully-recursive state - used by Search, "Fetch All", and Skip Review, which
     // all need every playable folder in the whole tree regardless of nesting depth.
@@ -38,6 +42,14 @@ class MusicLibraryViewModel(application: Application) : AndroidViewModel(applica
         // If the user already picked a folder in a previous session, load it automatically.
         repository.getSavedRootFolder()?.let { savedUri ->
             _rootUri.value = savedUri
+            // Show last session's scan result immediately (e.g. so the Library tab's
+            // "Random Skip All Albums" shortcut doesn't wait on a fresh recursive SAF walk
+            // of the whole tree just to appear) - loadPlaylists below then replaces it with
+            // a real, up-to-date scan without ever dropping back to a bare loading state.
+            val cached = playlistCache.load()
+            if (cached.isNotEmpty()) {
+                _state.value = LibraryState.Loaded(cached)
+            }
             loadPlaylists(savedUri)
             attachMetadataStore(savedUri)
         }
@@ -148,11 +160,18 @@ class MusicLibraryViewModel(application: Application) : AndroidViewModel(applica
     }
 
     private fun loadPlaylists(rootUri: Uri) {
-        _state.value = LibraryState.Loading
+        // Don't clobber an already-Loaded state (e.g. the cached list restored in init) with
+        // Loading - that would just flash shortcuts like "Random Skip All Albums" off again
+        // while this fresh scan runs, for no benefit over leaving the stale list on screen
+        // a little longer.
+        if (_state.value !is LibraryState.Loaded) {
+            _state.value = LibraryState.Loading
+        }
         viewModelScope.launch {
             try {
                 val playlists = repository.scanPlaylists(rootUri)
                 _state.value = LibraryState.Loaded(playlists)
+                withContext(Dispatchers.IO) { playlistCache.save(playlists) }
             } catch (e: Exception) {
                 _state.value = LibraryState.Error(e.message ?: "Couldn't scan music folder")
             }
