@@ -19,6 +19,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
@@ -174,13 +175,32 @@ private fun DockVisibilityRow(
         if (isExpanded) {
             Row(
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-                horizontalArrangement = Arrangement.End
+                horizontalArrangement = Arrangement.Center
             ) {
-                IconButton(onClick = onMoveUp ?: {}, enabled = onMoveUp != null) {
-                    Icon(Icons.Default.KeyboardArrowUp, contentDescription = "Move ${item.label} up")
+                IconButton(
+                    onClick = onMoveUp ?: {},
+                    enabled = onMoveUp != null,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowUp,
+                        contentDescription = "Move ${item.label} up",
+                        tint = Color.Red,
+                        modifier = Modifier.size(48.dp)
+                    )
                 }
-                IconButton(onClick = onMoveDown ?: {}, enabled = onMoveDown != null) {
-                    Icon(Icons.Default.KeyboardArrowDown, contentDescription = "Move ${item.label} down")
+                Spacer(modifier = Modifier.width(24.dp))
+                IconButton(
+                    onClick = onMoveDown ?: {},
+                    enabled = onMoveDown != null,
+                    modifier = Modifier.size(56.dp)
+                ) {
+                    Icon(
+                        Icons.Default.KeyboardArrowDown,
+                        contentDescription = "Move ${item.label} down",
+                        tint = Color.Red,
+                        modifier = Modifier.size(48.dp)
+                    )
                 }
             }
         }
