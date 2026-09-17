@@ -253,7 +253,6 @@ fun AppNavHost() {
                         libraryViewModel = libraryViewModel,
                         customPlaylistViewModel = customPlaylistViewModel,
                         buttonColorViewModel = buttonColorViewModel,
-                        onCollapse = { navController.popBackStack() },
                         onPlayRecommendation = { playlist ->
                             playerViewModel.playPlaylist(playlist, forceRestart = true)
                         }

@@ -16,7 +16,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -64,7 +63,6 @@ fun PlayerScreen(
     libraryViewModel: MusicLibraryViewModel,
     customPlaylistViewModel: CustomPlaylistViewModel,
     buttonColorViewModel: ButtonColorViewModel,
-    onCollapse: () -> Unit = {},
     onPlayRecommendation: (Playlist) -> Unit = {}
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -248,9 +246,6 @@ fun PlayerScreen(
             modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 4.dp, start = 24.dp, end = 24.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onCollapse) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Collapse")
-            }
             Text(
                 "Now Playing",
                 style = MaterialTheme.typography.headlineLarge,
