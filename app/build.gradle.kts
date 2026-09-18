@@ -26,8 +26,13 @@ android {
             // swap in a dedicated release keystore before distributing outside the team.
             signingConfig = signingConfigs.getByName("debug")
             optimization {
-                enable = false
+                enable = true
+                keepRules {
+                    files.add(getDefaultProguardFile("proguard-android-optimize.txt"))
+                    files.add(file("proguard-rules.pro"))
+                }
             }
+            isShrinkResources = true
         }
     }
     compileOptions {
