@@ -21,7 +21,7 @@ import java.net.URLEncoder
  */
 class OnlineMetadataFetcher {
 
-    private val userAgent = "DJKaylFromDownUnder/1.0 (contact: kayl.hosken@gmail.com)"
+    private val userAgent = "DJKaylDownUnder/1.0 (contact: kayl.hosken@gmail.com)"
 
     suspend fun fetch(guessTitle: String): TrackMetadata? {
         fetchFromMusicBrainz(guessTitle)?.let { return it }

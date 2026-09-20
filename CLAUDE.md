@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project overview
 
-"DJ Kayl From Down Under" is a single-module Android music player app (package
+"DJ KaylDownUnder" is a single-module Android music player app (package
 `com.k.hosken.djkayldownunder`) built with Jetpack Compose and Media3/ExoPlayer. It plays
 audio files directly from a user-chosen folder tree (accessed via Storage Access Framework) rather
 than relying on the system's MediaStore, and it enriches tracks with metadata/artwork pulled from
