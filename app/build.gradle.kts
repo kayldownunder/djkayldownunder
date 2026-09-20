@@ -1,16 +1,31 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
 }
 
+val releaseKeystorePropertiesFile = rootProject.file("keystore.properties")
+val releaseKeystoreProperties = Properties().apply {
+    if (releaseKeystorePropertiesFile.isFile) {
+        releaseKeystorePropertiesFile.inputStream().use(::load)
+    }
+}
+val releaseStoreFile = releaseKeystoreProperties.getProperty("storeFile")
+    ?.takeIf { it.isNotBlank() }
+    ?.let(rootProject::file)
+val hasReleaseSigning = releaseStoreFile?.isFile == true &&
+    listOf("storePassword", "keyAlias", "keyPassword")
+        .all { !releaseKeystoreProperties.getProperty(it).isNullOrBlank() }
+
 android {
-    namespace = "com.djkaylfromdownunder.musicplayer"
+    namespace = "com.k.hosken.djkayldownunder"
     compileSdk {
         version = release(37)
     }
 
     defaultConfig {
-        applicationId = "com.djkaylfromdownunder.musicplayer"
+        applicationId = "com.k.hosken.djkayldownunder"
         minSdk = 24
         targetSdk = 37
         versionCode = 1
@@ -19,12 +34,30 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile = releaseStoreFile
+                storePassword = releaseKeystoreProperties.getProperty("storePassword")
+                keyAlias = releaseKeystoreProperties.getProperty("keyAlias")
+                keyPassword = releaseKeystoreProperties.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Signed with the auto-generated debug keystore so this build type stays
-            // installable for testing. Not suitable for a real release/Play Store upload -
-            // swap in a dedicated release keystore before distributing outside the team.
-            signingConfig = signingConfigs.getByName("debug")
+            // Release bundles must use a private upload key, never the debug key. Configure
+            // it locally in the ignored root-level keystore.properties file; see
+            // keystore.properties.example. Without that file Gradle produces an unsigned
+            // release bundle, which is useful for CI checks but cannot be uploaded to Play.
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            ndk {
+                // Upload native symbols so Play Console can symbolicate crashes and ANRs.
+                debugSymbolLevel = "FULL"
+            }
             optimization {
                 enable = true
                 keepRules {

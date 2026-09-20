@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Project overview
 
 "DJ Kayl From Down Under" is a single-module Android music player app (package
-`com.djkaylfromdownunder.musicplayer`) built with Jetpack Compose and Media3/ExoPlayer. It plays
+`com.k.hosken.djkayldownunder`) built with Jetpack Compose and Media3/ExoPlayer. It plays
 audio files directly from a user-chosen folder tree (accessed via Storage Access Framework) rather
 than relying on the system's MediaStore, and it enriches tracks with metadata/artwork pulled from
 free online sources when local tags are missing.
@@ -25,8 +25,8 @@ gradlew.bat lint                   # run Android Lint
 Run a single JVM test class or method:
 
 ```
-gradlew.bat test --tests "com.djkaylfromdownunder.musicplayer.SomeTest"
-gradlew.bat test --tests "com.djkaylfromdownunder.musicplayer.SomeTest.someMethod"
+gradlew.bat test --tests "com.k.hosken.djkayldownunder.SomeTest"
+gradlew.bat test --tests "com.k.hosken.djkayldownunder.SomeTest.someMethod"
 ```
 
 There is currently no CI config and no meaningful test suite beyond the default
