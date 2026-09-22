@@ -70,6 +70,9 @@ fun AppNavHost() {
     val buttonColorViewModel: ButtonColorViewModel = viewModel()
     val audioNormalizationViewModel: AudioNormalizationViewModel = viewModel()
 
+    val libraryState by libraryViewModel.state.collectAsState()
+    val allPlaylists = (libraryState as? LibraryState.Loaded)?.playlists.orEmpty()
+
     var showViewSheet by remember { mutableStateOf(false) }
 
     val backStackEntry by navController.currentBackStackEntryAsState()
@@ -91,6 +94,10 @@ fun AppNavHost() {
     // every other screen it appears on too.
     val playerUiState by playerViewModel.uiState.collectAsState()
     val isShuffleAllActive = playerUiState.isShuffleAllActive
+
+    LaunchedEffect(allPlaylists) {
+        playerViewModel.restoreShuffleAllPool(allPlaylists)
+    }
 
     val visibleDockIds by dockPreferencesViewModel.visibleIds.collectAsState()
     val dockItems = remember(visibleDockIds) { dockPreferencesViewModel.resolve(visibleDockIds) }
@@ -142,8 +149,6 @@ fun AppNavHost() {
                         if (currentRootUri == null) {
                             NoLibraryChosenScreen(libraryViewModel = libraryViewModel)
                         } else {
-                            val libraryState by libraryViewModel.state.collectAsState()
-                            val allPlaylists = (libraryState as? LibraryState.Loaded)?.playlists.orEmpty()
                             FolderBrowserScreen(
                                 folderUri = currentRootUri,
                                 folderName = "Your Library",

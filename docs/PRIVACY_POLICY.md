@@ -22,6 +22,10 @@ by not using metadata fetch.
 DJ KaylDownUnder does not require an account, display advertising, use analytics or advertising SDKs, or
 sell personal information.
 
+## Children's privacy
+
+The app does not knowingly collect personal information from children.
+
 ## Security and retention
 
 App preferences and cached metadata remain on your device until you clear app storage or remove

@@ -69,7 +69,7 @@ class MetadataFetchService : Service() {
         createNotificationChannel()
     }
 
-    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+    override fun onStartCommand(_intent: Intent?, _flags: Int, startId: Int): Int {
         // Must be called within seconds of startForegroundService() regardless of
         // whether there's actually work to do, or the system kills the app for it.
         startForegroundCompat(buildNotification("Fetching song info…", 0, 0))
@@ -150,7 +150,7 @@ class MetadataFetchService : Service() {
         withContext(Dispatchers.IO) { store.flush() }
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(_intent: Intent?): IBinder? = null
 
     override fun onDestroy() {
         scope.cancel()

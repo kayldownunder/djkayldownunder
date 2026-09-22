@@ -226,9 +226,14 @@ private fun FontFamilyDropdown(selected: String, onSelected: (String) -> Unit) {
                         // itself doubles as a live example of what picking it looks like.
                         Text(
                             name,
-                            fontFamily = fontFamilyFor(name),
-                            style = MaterialTheme.typography.bodyLarge,
-                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            // Build the complete preview style here instead of passing the
+                            // Settings theme's body style separately. That theme style already
+                            // contains the currently selected family and can otherwise override
+                            // this option's family until the user selects a new one.
+                            style = MaterialTheme.typography.bodyLarge.copy(
+                                fontFamily = fontFamilyFor(name),
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                            ),
                         )
                     },
                     trailingIcon = {

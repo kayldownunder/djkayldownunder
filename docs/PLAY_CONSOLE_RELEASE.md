@@ -2,8 +2,8 @@
 
 ## Build and signing
 
-The Android app ID is `com.k.hosken.djkayldownunder`.  Release version 1.0 uses
-version code 1 and targets API 37.
+The Android app ID is `com.k.hosken.djkayldownunder`.  The current maintenance release is
+version 1.1, using version code 2 and targeting API 37.
 
 1. Create a private upload key (do not use the Android debug key), for example:
    `keytool -genkeypair -v -keystore release-upload.jks -alias upload -keyalg RSA -keysize 4096 -validity 10000`
@@ -33,7 +33,8 @@ or server operated by the developer.
   metadata on-device. When the user explicitly starts metadata fetching, a track name is sent
   to MusicBrainz, the Cover Art Archive, Apple iTunes Search, and Deezer to find matching
   metadata/artwork. No data is sent to a developer-controlled server. Recheck each selected
-  answer in Play Console against the final build and the linked privacy policy.
+  answer in Play Console against the final build and the linked privacy policy. The app uses the
+  Storage Access Framework, so it does not request broad audio-library access.
 
 ## Reviewer instructions
 
@@ -49,3 +50,6 @@ Before submitting, provide a publicly hosted privacy-policy URL, support email, 
 descriptions, a 512×512 app icon, a 1024×500 feature graphic, and at least two truthful phone
 screenshots. Use the draft in `docs/PRIVACY_POLICY.md` as the policy content after publishing it
 at a stable public URL.
+
+For paste-ready listing text and the remaining closed-test Console workflow, see
+`docs/CLOSED_TESTING.md`.

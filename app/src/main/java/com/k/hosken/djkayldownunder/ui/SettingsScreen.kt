@@ -1,15 +1,19 @@
 package com.k.hosken.djkayldownunder.ui
 
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -60,6 +64,7 @@ fun SettingsScreen(
 
     val blocks = remember(pendingOrder) { pendingOrder.mapNotNull { byId[it] } }
     val hasUnsavedChanges = pendingOrder != order
+    val context = LocalContext.current
 
     fun moveBlock(id: String, delta: Int) {
         val list = pendingOrder.toMutableList()
@@ -218,6 +223,27 @@ fun SettingsScreen(
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
                 }
+
+                item {
+                    HorizontalDivider(modifier = Modifier.padding(vertical = 8.dp))
+                    Text(
+                        "About",
+                        style = MaterialTheme.typography.titleMedium,
+                        modifier = Modifier.padding(top = 8.dp, bottom = 4.dp)
+                    )
+                    SettingsShortcutRow(
+                        icon = Icons.Default.Info,
+                        label = "Privacy Policy",
+                        onClick = {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Intent.ACTION_VIEW, Uri.parse(PRIVACY_POLICY_URL))
+                                )
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             if (hasUnsavedChanges) {
@@ -241,6 +267,10 @@ fun SettingsScreen(
         }
     }
 }
+
+/** Public policy page used by the Play listing and the in-app About section. */
+private const val PRIVACY_POLICY_URL =
+    "https://kayldownunder.github.io/djkayldownunder/"
 
 @Composable
 private fun SettingsBlockButton(

@@ -25,6 +25,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
 private const val TAG = "DJKaylResume"
+private const val PLAYER_PREFS = "djkayl_player_preferences"
+private const val SHUFFLE_ALL_ACTIVE_KEY = "shuffle_all_active"
 
 data class PlayerUiState(
     val currentTrack: Track? = null,
@@ -58,7 +60,12 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private val playbackStateRepository = PlaybackStateRepository(application)
     private val skipListRepository = SkipListRepository(application)
 
-    private val _uiState = MutableStateFlow(PlayerUiState())
+    private val playerPreferences = application.getSharedPreferences(PLAYER_PREFS, 0)
+    private val _uiState = MutableStateFlow(
+        PlayerUiState(
+            isShuffleAllActive = playerPreferences.getBoolean(SHUFFLE_ALL_ACTIVE_KEY, false)
+        )
+    )
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
     init {
@@ -357,6 +364,9 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         shuffleAllPool = playlists
         val activating = !_uiState.value.isShuffleAllActive
         _uiState.value = _uiState.value.copy(isShuffleAllActive = activating)
+        playerPreferences.edit()
+            .putBoolean(SHUFFLE_ALL_ACTIVE_KEY, activating)
+            .apply()
         if (!activating) {
             restoreQueueForCurrentTrack()
             return
@@ -369,6 +379,24 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
         } else {
             shuffleHistory = mutableListOf()
             shuffleHistoryPos = -1
+            playRandomTrackFromPool(pushHistory = true)
+        }
+    }
+
+    /**
+     * Supplies the current library to a restored random-playback session. The random mode flag
+     * is persisted, but the library itself is deliberately rebuilt from the user's selected
+     * folder rather than serialised into preferences. This is called when the library scan is
+     * available after a ViewModel/media-controller recreation.
+     */
+    fun restoreShuffleAllPool(playlists: List<Playlist>) {
+        if (!_uiState.value.isShuffleAllActive || playlists.isEmpty()) return
+
+        shuffleAllPool = playlists
+
+        // If Android recreated both the playback service and the ViewModel, there may be no
+        // current item left to continue. Start a new random item once the library is restored.
+        if (_uiState.value.currentTrack == null && controller?.mediaItemCount == 0) {
             playRandomTrackFromPool(pushHistory = true)
         }
     }
