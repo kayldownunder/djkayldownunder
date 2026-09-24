@@ -7,6 +7,11 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <!-- Lets MainActivity offer the "ignore battery optimizations" system dialog so background
+         playback survives being backgrounded. Without this, Android (Samsung especially) can
+         kill MusicPlaybackService's process while backgrounded, which drops playback and resets
+         in-memory UI state such as PlayerViewModel.isShuffleAllActive. -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
     <application
         android:allowBackup="true"

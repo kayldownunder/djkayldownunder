@@ -13,6 +13,15 @@ version 1.1, using version code 2 and targeting API 37.
 4. Upload `app/build/outputs/bundle/release/app-release.aab` to Play Console. Enrol in
    Play App Signing when prompted, then keep the upload key backed up securely.
 
+**Never regenerate `release-upload.jks` once it's been used for a real upload.** Doing so
+silently changes the certificate fingerprint Play expects, and every later bundle signed with
+the new file will be rejected on upload until you go through Play Console's "Request upload
+key reset" flow (Protected with Play → App signing → Request upload key reset), which needs
+manual Google review and is not instant. This happened once already on 2026-09-22 — the
+keystore was regenerated after the 1.0 upload, orphaning it, and a reset had to be requested
+using the (different again) key that was actually on disk at the time. Back the file up
+somewhere outside the repo the moment it's created.
+
 ## Required Play Console declarations
 
 The app is a local music player. It has no account system, advertising SDK, analytics SDK,
@@ -44,12 +53,21 @@ or server operated by the developer.
    playlist or Fetch Metadata for All Playlists. The ongoing “Fetching song info” notification
    remains visible until the operation completes.
 
-## Store assets still needed
+## Store assets
 
-Before submitting, provide a publicly hosted privacy-policy URL, support email, short and full
-descriptions, a 512×512 app icon, a 1024×500 feature graphic, and at least two truthful phone
-screenshots. Use the draft in `docs/PRIVACY_POLICY.md` as the policy content after publishing it
-at a stable public URL.
+All in place as of 2026-09-23, in `docs/store-assets/`:
+
+* Privacy policy published and live at `https://kayldownunder.github.io/djkayldownunder/`
+  (verified returning HTTP 200) — this is the URL set in Play Console's Store settings.
+* App icon: `app-icon-512.png` — the app's actual launcher icon
+  (`app/src/main/ic_launcher-playstore.png`), not a placeholder.
+* Feature graphic: `feature-graphic.png` — generated to match the launcher icon (same icon
+  centred on a blurred/darkened version of itself as the background). Labelled as
+  AI-generated in the store listing, along with the app icon.
+* Phone screenshots: `phone-1-library.png`, `phone-2-now-playing.png`, `phone-3-playlist.png` —
+  real captures from a debug build running on the Pixel_9 emulator, with placeholder/demo
+  tracks and generated cover art (not real user music). 1080×1920, meets the 3-screenshot
+  minimum (Play requires 2+; 4+ only unlocks promotion eligibility, not required here).
 
 For paste-ready listing text and the remaining closed-test Console workflow, see
 `docs/CLOSED_TESTING.md`.
