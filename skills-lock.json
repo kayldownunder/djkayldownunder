@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "r8-analyzer": {
+      "source": "android/skills",
+      "sourceType": "github",
+      "skillPath": "performance/r8-analyzer/SKILL.md",
+      "computedHash": "041a28dc521b9ecd8d21aef9ebe3297bec07213e0f33f59022c7f8131fef3332"
+    }
+  }
+}
