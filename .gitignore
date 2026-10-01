@@ -10,6 +10,9 @@
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+/.claude/settings.local.json
+/.gradle-user
+/app/release
 .DS_Store
 /build
 /captures
