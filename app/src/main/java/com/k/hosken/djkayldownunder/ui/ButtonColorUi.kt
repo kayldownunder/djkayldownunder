@@ -139,7 +139,9 @@ fun RandomSkipAllShortcut(
     onClick: () -> Unit,
     buttonColorViewModel: ButtonColorViewModel,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    label: String = "Random skip all albums",
+    icon: ImageVector = Icons.Default.Shuffle
 ) {
     val color by buttonColorViewModel.color.collectAsState()
     Column(
@@ -155,10 +157,10 @@ fun RandomSkipAllShortcut(
                 contentColor = if (isActive) Color.White else Color.Black
             )
         ) {
-            Icon(Icons.Default.Shuffle, contentDescription = "Random skip all albums", modifier = Modifier.size(16.dp))
+            Icon(icon, contentDescription = label, modifier = Modifier.size(16.dp))
         }
         Text(
-            "Random skip all albums",
+            label,
             style = MaterialTheme.typography.bodySmall.copy(fontSize = 13.sp, lineHeight = 14.sp),
             color = Color.White,
             textAlign = TextAlign.Center,

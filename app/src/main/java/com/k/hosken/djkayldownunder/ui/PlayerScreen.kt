@@ -261,12 +261,26 @@ fun PlayerScreen(
                     .onGloballyPositioned { titleTextLeftPx = it.positionInRoot().x },
                 onTextLayout = { titleLayoutResult = it }
             )
-            if (allPlaylists.isNotEmpty()) {
-                RandomSkipAllShortcut(
-                    isActive = state.isShuffleAllActive,
-                    onClick = { viewModel.toggleShuffleAllAlbums(allPlaylists) },
-                    buttonColorViewModel = buttonColorViewModel
-                )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                if (allPlaylists.isNotEmpty()) {
+                    RandomSkipAllShortcut(
+                        isActive = state.isShuffleAllActive,
+                        onClick = { viewModel.toggleShuffleAllAlbums(allPlaylists) },
+                        buttonColorViewModel = buttonColorViewModel
+                    )
+                }
+                if (state.currentTrack != null) {
+                    RandomSkipAllShortcut(
+                        isActive = state.isShuffleEnabled && !state.isShuffleAllActive,
+                        onClick = { viewModel.toggleShuffleCurrentAlbum() },
+                        buttonColorViewModel = buttonColorViewModel,
+                        label = "Random skip this album",
+                        icon = Icons.Default.LibraryMusic
+                    )
+                }
             }
         }
 

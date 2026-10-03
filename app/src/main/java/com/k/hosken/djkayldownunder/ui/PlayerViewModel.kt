@@ -340,6 +340,22 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
+     * "Random skip this album" (Now Playing, 3 Oct): random order within the album/folder the
+     * current track belongs to. If "Random Skip All Albums" is on, it's switched off first,
+     * which reloads this track's own album as the queue (see [restoreQueueForCurrentTrack]),
+     * then Media3's shuffle randomizes that album only. Tapping again turns it off.
+     */
+    fun toggleShuffleCurrentAlbum() {
+        if (_uiState.value.isShuffleAllActive) {
+            toggleShuffleAllAlbums(shuffleAllPool)
+            controller?.shuffleModeEnabled = true
+            _uiState.value = _uiState.value.copy(isShuffleEnabled = true)
+            return
+        }
+        toggleShuffle()
+    }
+
+    /**
      * Toggles "Random Skip All Albums" mode (the shuffle-all shortcut on the Player,
      * Library, and Play Lists screens). Turning it on never interrupts whatever's already
      * loaded - it just switches Next/Previous/end-of-track over to the random-across-every-
