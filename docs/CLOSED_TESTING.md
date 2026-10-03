@@ -56,7 +56,7 @@ Your music library stays on your device. DJ KaylDownUnder has no ads and no anal
 
 ## Release notes
 
-Maintenance release 1.1: fixed Random Skip All playback continuing after the app reconnects to
+Maintenance release 1.1: fixed Random Shuffle All playback continuing after the app reconnects to
 the media service. Please test choosing a music folder, playback controls, background playback,
 playlists, favourites, and optional metadata fetching. Report any crashes, missing tracks, or
 incorrect metadata.

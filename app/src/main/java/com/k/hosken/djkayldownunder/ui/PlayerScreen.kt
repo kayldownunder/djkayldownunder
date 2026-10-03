@@ -240,14 +240,14 @@ fun PlayerScreen(
             )
     ) {
         // A Row with a weighted title (rather than a Box with independently-centered
-        // children) so the title never overlaps the "Random skip all albums" shortcut -
+        // children) so the title never overlaps the "Random shuffle all albums" shortcut -
         // which a Box-based header would do, since "Now Playing" at headlineLarge is
         // nearly as wide as the screen on its own. The shortcut sits at the far right -
         // the screen's pre-existing "shuffle current album" toggle used to sit there too
         // but was removed from here since its icon was easily confused with this new
         // shortcut's own shuffle icon.
         Row(
-            // "Random skip all albums" on the left, "Random skip this album" on the right and
+            // "Random shuffle all albums" on the left, "Random shuffle this album" on the right and
             // "Now Playing" centred between them (Kayl, 3 Oct). Each side keeps its width even
             // when its button is hidden, so the title stays in the middle.
             modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 4.dp, start = 12.dp, end = 12.dp),
@@ -255,7 +255,7 @@ fun PlayerScreen(
         ) {
             Box(Modifier.width(84.dp), contentAlignment = Alignment.Center) {
                 if (allPlaylists.isNotEmpty()) {
-                    RandomSkipAllShortcut(
+                    RandomShuffleAllShortcut(
                         isActive = state.isShuffleAllActive,
                         onClick = { viewModel.toggleShuffleAllAlbums(allPlaylists) },
                         buttonColorViewModel = buttonColorViewModel
@@ -275,11 +275,11 @@ fun PlayerScreen(
             )
             Box(Modifier.width(84.dp), contentAlignment = Alignment.Center) {
                 if (state.currentTrack != null) {
-                    RandomSkipAllShortcut(
+                    RandomShuffleAllShortcut(
                         isActive = state.isShuffleEnabled && !state.isShuffleAllActive,
                         onClick = { viewModel.toggleShuffleCurrentAlbum() },
                         buttonColorViewModel = buttonColorViewModel,
-                        label = "Random skip this album",
+                        label = "Random shuffle this album",
                         icon = Icons.Default.LibraryMusic
                     )
                 }

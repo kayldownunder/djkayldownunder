@@ -109,7 +109,7 @@ fun FolderBrowserScreen(
                 modifier = Modifier.weight(1f)
             )
             if (onShuffleAll != null) {
-                RandomSkipAllShortcut(
+                RandomShuffleAllShortcut(
                     isActive = isShuffleAllActive,
                     onClick = onShuffleAll,
                     buttonColorViewModel = buttonColorViewModel

@@ -89,7 +89,7 @@ fun AppNavHost() {
         Routes.PLAYER, Routes.SKIP_REVIEW, Routes.SEARCH, Routes.CREATE_PLAYLIST, Routes.DOCK_SETTINGS
     )
 
-    // "Random Skip All Albums" is a single shared toggle (PlayerViewModel.uiState) rather
+    // "Random Shuffle All Albums" is a single shared toggle (PlayerViewModel.uiState) rather
     // than something each screen's shortcut owns independently - collected once here so
     // the Library, Play Lists, and Now Playing screens' shortcuts all stay in sync:
     // turning it on/off from any one of them highlights (or un-highlights) the button on
@@ -226,7 +226,7 @@ fun AppNavHost() {
                             playerViewModel.playPlaylist(playlist)
                             navController.navigate(Routes.PLAYER)
                         },
-                        onRandomSkipAllAlbums = { playlists ->
+                        onRandomShuffleAllAlbums = { playlists ->
                             playerViewModel.toggleShuffleAllAlbums(playlists)
                             navController.navigate(Routes.PLAYER)
                         }

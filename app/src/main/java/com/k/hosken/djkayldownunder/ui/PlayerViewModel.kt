@@ -39,7 +39,7 @@ data class PlayerUiState(
     val currentIndex: Int = -1,
     val currentPlaylistFolderUri: String? = null,
     val isShuffleEnabled: Boolean = false,
-    val isShuffleAllActive: Boolean = false  // "Random Skip All Albums" mode - see PlayerViewModel
+    val isShuffleAllActive: Boolean = false  // "Random Shuffle All Albums" mode - see PlayerViewModel
 )
 
 @UnstableApi
@@ -50,7 +50,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     private var currentFolderUri: String? = null
     private var currentPlaylist: Playlist? = null
 
-    // "Random Skip All Albums" mode state: the full library to pick from, and the actual
+    // "Random Shuffle All Albums" mode state: the full library to pick from, and the actual
     // sequence of tracks played while the mode has been on (not a pre-shuffled queue - each
     // Next/auto-advance picks fresh) so Previous can walk back through real playback history.
     private var shuffleAllPool: List<Playlist> = emptyList()
@@ -128,7 +128,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
                     else -> "UNKNOWN($playbackState)"
                 }
                 Log.d(TAG, "onPlaybackStateChanged state=$stateName currentTrack=${_uiState.value.currentTrack?.displayName}")
-                // "Random Skip All Albums": a track ending naturally (queue is always just
+                // "Random Shuffle All Albums": a track ending naturally (queue is always just
                 // the one track while this mode is active, so ending means STATE_ENDED, not
                 // an automatic transition to a next queued item) picks another random track,
                 // same as pressing Next.
@@ -144,7 +144,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
             // from a normal pause. Logged with full detail so a captured logcat pinpoints
             // exactly which track/error caused it.
             //
-            // While "Random Skip All Albums" is active this is also the most likely cause of
+            // While "Random Shuffle All Albums" is active this is also the most likely cause of
             // the mode appearing to "just stop" after a while: it plays one random track at a
             // time from the *entire* library, so the odds of eventually landing on a file that
             // was since moved/renamed/deleted (and therefore fails to load) climb the longer
@@ -340,8 +340,8 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * "Random skip this album" (Now Playing, 3 Oct): random order within the album/folder the
-     * current track belongs to. If "Random Skip All Albums" is on, it's switched off first,
+     * "Random shuffle this album" (Now Playing, 3 Oct): random order within the album/folder the
+     * current track belongs to. If "Random Shuffle All Albums" is on, it's switched off first,
      * which reloads this track's own album as the queue (see [restoreQueueForCurrentTrack]),
      * then Media3's shuffle randomizes that album only. Tapping again turns it off.
      */
@@ -356,7 +356,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Toggles "Random Skip All Albums" mode (the shuffle-all shortcut on the Player,
+     * Toggles "Random Shuffle All Albums" mode (the shuffle-all shortcut on the Player,
      * Library, and Play Lists screens). Turning it on never interrupts whatever's already
      * loaded - it just switches Next/Previous/end-of-track over to the random-across-every-
      * album behavior below - except when nothing is loaded yet (e.g. the shortcut is
@@ -418,7 +418,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * Turning "Random Skip All Albums" off needs to undo what [playSingleTrack] did to the
+     * Turning "Random Shuffle All Albums" off needs to undo what [playSingleTrack] did to the
      * controller/state while it was active: every track change while that mode is on loads
      * the controller with just that one track (see playSingleTrack), collapsing the real
      * queue/fullTrackList down to a single item. Left alone, that breaks end-of-track
@@ -540,7 +540,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * While "Random Skip All Albums" is active, picks a fresh random track from every
+     * While "Random Shuffle All Albums" is active, picks a fresh random track from every
      * album instead of stepping to the next item in whatever queue happens to be loaded.
      */
     fun skipNext() {
@@ -552,7 +552,7 @@ class PlayerViewModel(application: Application) : AndroidViewModel(application) 
     }
 
     /**
-     * While "Random Skip All Albums" is active, walks backward through the tracks it has
+     * While "Random Shuffle All Albums" is active, walks backward through the tracks it has
      * actually played (via [shuffleHistory]) so Previous returns to what was just heard,
      * rather than picking another random one; a no-op once there's nothing earlier to go
      * back to. Otherwise defers to the controller's own queue navigation as normal.

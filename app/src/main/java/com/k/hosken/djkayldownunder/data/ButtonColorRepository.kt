@@ -4,7 +4,7 @@ import android.content.Context
 
 /**
  * Persists the single global color applied to every "shortcut" button across the app
- * (Settings' reorderable shortcut grid, plus the Playlist/Now Playing "Random skip all
+ * (Settings' reorderable shortcut grid, plus the Playlist/Now Playing "Random shuffle all
  * albums" shortcut) - see ButtonColorViewModel, which is what screens actually read from.
  */
 class ButtonColorRepository(context: Context) {

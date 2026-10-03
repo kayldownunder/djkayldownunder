@@ -27,7 +27,7 @@ fun PlayListsScreen(
     buttonColorViewModel: ButtonColorViewModel,
     isShuffleAllActive: Boolean,
     onPlaylistClick: (Playlist) -> Unit,
-    onRandomSkipAllAlbums: (List<Playlist>) -> Unit
+    onRandomShuffleAllAlbums: (List<Playlist>) -> Unit
 ) {
     val libraryState by libraryViewModel.state.collectAsState()
     val viewMode by viewPreferencesViewModel.viewMode.collectAsState()
@@ -74,9 +74,9 @@ fun PlayListsScreen(
                 modifier = Modifier.weight(1f)
             )
             if (folderPlaylists.isNotEmpty()) {
-                RandomSkipAllShortcut(
+                RandomShuffleAllShortcut(
                     isActive = isShuffleAllActive,
-                    onClick = { onRandomSkipAllAlbums(folderPlaylists) },
+                    onClick = { onRandomShuffleAllAlbums(folderPlaylists) },
                     buttonColorViewModel = buttonColorViewModel
                 )
             }

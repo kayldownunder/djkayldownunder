@@ -12,7 +12,7 @@ private const val CACHE_FILE_NAME = "playlist_cache.json"
 
 /**
  * On-disk cache of the last full library scan (see MusicFolderRepository.scanPlaylists), so
- * the Library tab's "Random Skip All Albums" shortcut etc. can appear immediately on app
+ * the Library tab's "Random Shuffle All Albums" shortcut etc. can appear immediately on app
  * startup instead of waiting for a fresh recursive SAF walk of the whole tree to finish - see
  * MusicLibraryViewModel.init. Purely a "show something now" optimization: a real scan always
  * follows and overwrites it once done, so a file deleted/renamed outside the app only really

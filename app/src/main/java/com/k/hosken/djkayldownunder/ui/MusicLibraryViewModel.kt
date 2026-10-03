@@ -43,7 +43,7 @@ class MusicLibraryViewModel(application: Application) : AndroidViewModel(applica
         repository.getSavedRootFolder()?.let { savedUri ->
             _rootUri.value = savedUri
             // Show last session's scan result immediately (e.g. so the Library tab's
-            // "Random Skip All Albums" shortcut doesn't wait on a fresh recursive SAF walk
+            // "Random Shuffle All Albums" shortcut doesn't wait on a fresh recursive SAF walk
             // of the whole tree just to appear) - loadPlaylists below then replaces it with
             // a real, up-to-date scan without ever dropping back to a bare loading state.
             val cached = playlistCache.load()
@@ -161,7 +161,7 @@ class MusicLibraryViewModel(application: Application) : AndroidViewModel(applica
 
     private fun loadPlaylists(rootUri: Uri) {
         // Don't clobber an already-Loaded state (e.g. the cached list restored in init) with
-        // Loading - that would just flash shortcuts like "Random Skip All Albums" off again
+        // Loading - that would just flash shortcuts like "Random Shuffle All Albums" off again
         // while this fresh scan runs, for no benefit over leaving the stale list on screen
         // a little longer.
         if (_state.value !is LibraryState.Loaded) {

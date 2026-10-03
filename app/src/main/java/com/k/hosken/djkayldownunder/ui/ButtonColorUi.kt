@@ -54,7 +54,7 @@ class ButtonColorViewModel(application: Application) : AndroidViewModel(applicat
 
 /**
  * Settings entry point ("Shortcut Button Color Selection"): opens a color palette. Selecting
- * a swatch recolors the "Random skip all albums" shortcut (see [RandomSkipAllShortcut]) on
+ * a swatch recolors the "Random shuffle all albums" shortcut (see [RandomShuffleAllShortcut]) on
  * the Library, Play Lists, and Now Playing screens - the Settings shortcuts themselves are
  * plain icon+label rows and don't use this color.
  */
@@ -129,18 +129,18 @@ fun ShortcutButtonColorPicker(
  *
  * [isActive] must reflect PlayerViewModel's actual isShuffleAllActive state (not a local
  * toggle owned by this composable) - it's the single source of truth shared across every
- * screen, so turning "Random Skip All Albums" on or off from any one of these three
+ * screen, so turning "Random Shuffle All Albums" on or off from any one of these three
  * highlights (or un-highlights) the button identically everywhere else it's shown, and
  * the highlighted state survives navigating between screens.
  */
 @Composable
-fun RandomSkipAllShortcut(
+fun RandomShuffleAllShortcut(
     isActive: Boolean,
     onClick: () -> Unit,
     buttonColorViewModel: ButtonColorViewModel,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    label: String = "Random skip all albums",
+    label: String = "Random shuffle all albums",
     icon: ImageVector = Icons.Default.Shuffle
 ) {
     val color by buttonColorViewModel.color.collectAsState()
