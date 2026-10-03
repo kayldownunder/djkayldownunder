@@ -247,9 +247,21 @@ fun PlayerScreen(
         // but was removed from here since its icon was easily confused with this new
         // shortcut's own shuffle icon.
         Row(
-            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 4.dp, start = 24.dp, end = 24.dp),
+            // "Random skip all albums" on the left, "Random skip this album" on the right and
+            // "Now Playing" centred between them (Kayl, 3 Oct). Each side keeps its width even
+            // when its button is hidden, so the title stays in the middle.
+            modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 4.dp, start = 12.dp, end = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Box(Modifier.width(84.dp), contentAlignment = Alignment.Center) {
+                if (allPlaylists.isNotEmpty()) {
+                    RandomSkipAllShortcut(
+                        isActive = state.isShuffleAllActive,
+                        onClick = { viewModel.toggleShuffleAllAlbums(allPlaylists) },
+                        buttonColorViewModel = buttonColorViewModel
+                    )
+                }
+            }
             Text(
                 "Now Playing",
                 style = MaterialTheme.typography.headlineLarge,
@@ -261,17 +273,7 @@ fun PlayerScreen(
                     .onGloballyPositioned { titleTextLeftPx = it.positionInRoot().x },
                 onTextLayout = { titleLayoutResult = it }
             )
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                if (allPlaylists.isNotEmpty()) {
-                    RandomSkipAllShortcut(
-                        isActive = state.isShuffleAllActive,
-                        onClick = { viewModel.toggleShuffleAllAlbums(allPlaylists) },
-                        buttonColorViewModel = buttonColorViewModel
-                    )
-                }
+            Box(Modifier.width(84.dp), contentAlignment = Alignment.Center) {
                 if (state.currentTrack != null) {
                     RandomSkipAllShortcut(
                         isActive = state.isShuffleEnabled && !state.isShuffleAllActive,
