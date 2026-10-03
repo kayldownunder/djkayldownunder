@@ -140,7 +140,7 @@ fun RandomShuffleAllShortcut(
     buttonColorViewModel: ButtonColorViewModel,
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
-    label: String = "Random shuffle all albums",
+    label: String = "Random shuffle all",
     icon: ImageVector = Icons.Default.Shuffle
 ) {
     val color by buttonColorViewModel.color.collectAsState()

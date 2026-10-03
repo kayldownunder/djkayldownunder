@@ -247,7 +247,7 @@ fun PlayerScreen(
         // but was removed from here since its icon was easily confused with this new
         // shortcut's own shuffle icon.
         Row(
-            // "Random shuffle all albums" on the left, "Random shuffle this album" on the right and
+            // "Random shuffle all" on the left, "Random shuffle" (this album only) on the right and
             // "Now Playing" centred between them (Kayl, 3 Oct). Each side keeps its width even
             // when its button is hidden, so the title stays in the middle.
             modifier = Modifier.fillMaxWidth().statusBarsPadding().padding(top = 4.dp, start = 12.dp, end = 12.dp),
@@ -279,7 +279,7 @@ fun PlayerScreen(
                         isActive = state.isShuffleEnabled && !state.isShuffleAllActive,
                         onClick = { viewModel.toggleShuffleCurrentAlbum() },
                         buttonColorViewModel = buttonColorViewModel,
-                        label = "Random shuffle this album",
+                        label = "Random shuffle",
                         icon = Icons.Default.LibraryMusic
                     )
                 }
