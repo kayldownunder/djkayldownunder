@@ -105,6 +105,16 @@ class MusicPlaybackService : MediaSessionService() {
                 )
             }
 
+            // The app has no repeat button, but Bluetooth head units (the Ford Ranger, 22 Oct 2026)
+            // can set repeat-one through the media session. It then stuck on one song until the
+            // phone was rebooted, even on other Bluetooth devices. Always turn it back off.
+            override fun onRepeatModeChanged(repeatMode: Int) {
+                if (repeatMode != Player.REPEAT_MODE_OFF) {
+                    diagnostics?.log("Repeat mode $repeatMode requested by a controller - resetting to off")
+                    player.repeatMode = Player.REPEAT_MODE_OFF
+                }
+            }
+
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 if (!isPlaying) {
                     lastPauseElapsedRealtime = SystemClock.elapsedRealtime()
