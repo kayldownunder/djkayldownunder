@@ -9,6 +9,8 @@ import android.media.AudioManager
 import android.os.Build
 import android.os.SystemClock
 import android.util.Log
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.C
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -72,6 +74,17 @@ class MusicPlaybackService : MediaSessionService() {
         }
         val player = ExoPlayer.Builder(this, renderersFactory)
             .setHandleAudioBecomingNoisy(true)
+            // Android 17 "audio hardening" (22 Oct 2026): a new AudioTrack started in the background
+            // is muted unless the app holds audio focus ("AudioHardening background playback muted"
+            // in logcat). Each track change makes a new AudioTrack, so with the screen off the next
+            // song played silently while the player still said "playing". Handling focus fixes it.
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(C.USAGE_MEDIA)
+                    .setContentType(C.AUDIO_CONTENT_TYPE_MUSIC)
+                    .build(),
+                true
+            )
             .build()
 
         diagnostics = PlaybackDiagnostics(this, player).also {
