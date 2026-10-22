@@ -145,6 +145,16 @@ class MusicPlaybackService : MediaSessionService() {
         return mediaSession
     }
 
+    // Android 17 gives a foreground service "while-in-use" rights only if it was started while the
+    // app was visible (or by a notification tap / media key). Media3 drops out of the foreground
+    // when paused, so pressing play later from the lock screen or a Bluetooth button restarted the
+    // service from the background without those rights and the audio was muted ("AudioHardening
+    // background playback muted ... level: full", 22 Oct 2026). Staying in the foreground while
+    // paused keeps the rights from when the user first started playing.
+    override fun onUpdateNotification(session: MediaSession, startInForegroundRequired: Boolean) {
+        super.onUpdateNotification(session, startInForegroundRequired || session.player.mediaItemCount > 0)
+    }
+
     override fun onTaskRemoved(rootIntent: Intent?) {
         val player = mediaSession?.player
         val shouldStop = player == null || !player.playWhenReady || player.mediaItemCount == 0
